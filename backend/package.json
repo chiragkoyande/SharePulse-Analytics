@@ -1,0 +1,29 @@
+{
+    "name": "sharepulse-analytics-backend",
+    "version": "1.0.0",
+    "description": "WhatsApp bot + Express API for SharePulse Analytics.",
+    "main": "index.js",
+    "type": "module",
+    "scripts": {
+        "start": "node index.js",
+        "dev": "node --watch index.js"
+    },
+    "keywords": [
+        "whatsapp",
+        "supabase",
+        "express",
+        "bot"
+    ],
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "@supabase/supabase-js": "^2.45.0",
+        "cors": "^2.8.5",
+        "dotenv": "^16.4.7",
+        "express": "^4.21.1",
+        "node-fetch": "^3.3.2",
+        "nodemailer": "^6.10.1",
+        "qrcode-terminal": "^0.12.0",
+        "whatsapp-web.js": "^1.26.1-alpha.3"
+    }
+}
