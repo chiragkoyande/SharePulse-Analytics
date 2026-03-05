@@ -1,258 +1,233 @@
-# 🔗 SharePulse Analytics
+# SharePulse Analytics
 
-A full-stack system that monitors a specific WhatsApp group, automatically extracts URLs from messages, scrapes page titles, and displays everything in a beautiful React dashboard.
+SharePulse Analytics is a full-stack SaaS-style dashboard that monitors a WhatsApp group, extracts shared links, deduplicates and scores them, and gives admins a secure access workflow for team members.
 
-**Made by [Chirag Koyande](https://github.com/chirag-koyande)**
+Owner: [Chirag Koyande](https://github.com/chiragkoyande)  
+Repository: <https://github.com/chiragkoyande/SharePulse-Analytics>
 
----
+## What It Does
+- Monitors one target WhatsApp group in near real time.
+- Scans message history on startup to backfill links.
+- Extracts URL + domain + page title and stores normalized hashes.
+- Prevents duplicates and tracks share/vote engagement.
+- Provides role-based access flow (request, approve/reject, revoke, promote).
+- Lets users save links and export data to CSV.
+- Sends approval emails via SMTP (Gmail app-password friendly).
 
-## ✨ Features
+## Tech Stack
+- Backend: Node.js, Express, `whatsapp-web.js`, Supabase JS
+- Frontend: React + Vite
+- Database/Auth: Supabase Postgres + Supabase Auth
+- Mail: Nodemailer SMTP
 
-- 📱 **WhatsApp Monitoring** — Connects via QR scan, monitors a specific group
-- 📜 **Historical Scan** — Fetches last 500 messages and extracts all existing URLs on startup
-- 🔗 **URL Extraction** — Robust regex-based detection, supports multiple URLs per message
-- 📄 **Auto Title Scraping** — Fetches `<title>` tag from each URL (5s timeout)
-- ⏭️ **Duplicate Detection** — Database-level dedup, skips already-saved URLs
-- 🔍 **Search** — Filter by URL, title, or sender name
-- 📊 **Stats Dashboard** — Total resources, today's count, top domains, duplicates
-- 🔖 **Saved Links** — Users can save/unsave links for quick revisit
-- 📧 **Approval Email Notification** — Users get an email when admin approves access
-- 🌙 **Dark/Light Mode** — Theme toggle with localStorage persistence
-- 📱 **Responsive** — Desktop table view + mobile card layout
-
----
-
-## 🏗️ Architecture
-
-```
+## Architecture
+```text
 WhatsApp Group
-      ↓
-Node.js Bot (whatsapp-web.js + Puppeteer)
-      ↓
-Supabase (PostgreSQL)
-      ↓
-Express REST API
-      ↓
-React Dashboard (Vite)
+   -> Bot ingestion (whatsapp-web.js)
+   -> Supabase (resources, votes, saves, users, requests)
+   -> Express API (auth/admin/resources/version)
+   -> React Dashboard
 ```
 
----
-
-## 📁 Project Structure
-
-```
-├── schema.sql                     # Database setup script
+## Repository Structure
+```text
+.
+├── schema.sql
+├── migration_v2.sql
+├── migration_v3_auth.sql
+├── migration_v3_votes.sql
+├── migration_v4_access_request_password.sql
+├── migration_v5_resource_saves.sql
 ├── backend/
-│   ├── package.json
-│   ├── .env.example               # Environment template
-│   ├── index.js                   # Express server entry point
-│   ├── bot.js                     # WhatsApp bot + history scanner
-│   ├── db.js                      # Supabase client
+│   ├── index.js
+│   ├── bot.js
+│   ├── db.js
+│   ├── middleware/
 │   ├── routes/
-│   │   └── resources.js           # REST API endpoints
 │   └── utils/
-│       └── urlExtractor.js        # URL regex extraction
 └── frontend/
-    ├── package.json
-    ├── .env.example
-    ├── vite.config.js             # Vite config with API proxy
+    ├── src/
     ├── index.html
-    └── src/
-        ├── App.jsx                # Main dashboard
-        ├── api.js                 # Axios API client
-        ├── index.css              # Design system (light/dark)
-        ├── main.jsx
-        └── components/
-            ├── StatsCard.jsx
-            ├── SearchBar.jsx
-            └── ResourceTable.jsx
+    └── vite.config.js
 ```
 
----
+## Prerequisites
+- Node.js 18+ (Node 22 recommended)
+- Supabase project
+- WhatsApp account for QR-linked session
+- Chrome/Chromium available on machine (or Puppeteer-managed browser)
 
-## 🚀 Quick Start
+## 1) Database Setup (Supabase)
+Run SQL files in this order from Supabase SQL Editor:
 
-### Prerequisites
+1. `schema.sql`
+2. `migration_v2.sql`
+3. `migration_v3_auth.sql`
+4. `migration_v3_votes.sql`
+5. `migration_v4_access_request_password.sql`
+6. `migration_v5_resource_saves.sql`
 
-- **Node.js** v18+ ([download](https://nodejs.org))
-- **Google Chrome/Chromium** (optional if Puppeteer-managed browser is used)
-- **WhatsApp** account with an active phone
-- **Supabase** account ([sign up free](https://supabase.com))
-
----
-
-### Step 1: Clone the Repository
-
-```bash
-git clone https://github.com/YOUR_USERNAME/jod_anlyzer.git
-cd jod_anlyzer
-```
-
----
-
-### Step 2: Create the Supabase Database
-
-1. Go to [supabase.com/dashboard](https://supabase.com/dashboard)
-2. Create a new project (free tier works)
-3. Go to **SQL Editor** → **New Query**
-4. Paste the contents of `schema.sql` and click **Run**:
-
-```sql
-CREATE TABLE resources (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  url TEXT NOT NULL,
-  title TEXT DEFAULT 'New Resource',
-  context TEXT,
-  sender TEXT DEFAULT 'Unknown',
-  group_name TEXT DEFAULT 'Unknown Group',
-  created_at TIMESTAMPTZ DEFAULT now(),
-  is_duplicate BOOLEAN DEFAULT FALSE
-);
-
-CREATE INDEX IF NOT EXISTS idx_resources_url ON resources (url);
-CREATE INDEX IF NOT EXISTS idx_resources_created_at ON resources (created_at DESC);
-
-ALTER TABLE resources ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow public read" ON resources FOR SELECT USING (true);
-CREATE POLICY "Allow service insert" ON resources FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow service update" ON resources FOR UPDATE USING (true);
-```
-
----
-
-### Step 3: Configure Backend
-
-```bash
-cd backend
-cp .env.example .env
-```
-
-Edit `backend/.env` with your values:
+## 2) Backend Setup
+Create `backend/.env`:
 
 ```env
+# Required
 SUPABASE_URL=https://your-project-id.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
-TARGET_GROUP_ID=temp
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+TARGET_GROUP_ID=120363XXXXXXXXXXXX@g.us
+
+# Server
 PORT=3001
-HEADLESS=false
-# Optional: only set if you want to force a specific Chrome binary
+
+# Admin bootstrap
+ADMIN_EMAIL=you@example.com
+ADMIN_PASSWORD=change_this_password
+ADMIN_RESET_PASSWORD_ON_START=false
+
+# WhatsApp bot runtime
+HEADLESS=true
 # CHROME_PATH=/usr/bin/google-chrome
-# Optional: Gmail SMTP app password (for approval notification emails)
-# SMTP_HOST=smtp.gmail.com
-# SMTP_PORT=465
-# SMTP_SECURE=true
-# SMTP_USER=your_email@gmail.com
-# SMTP_PASS=your_16_char_app_password
-# SMTP_FROM="SharePulse Analytics <your_email@gmail.com>"
+# WWEBJS_CLIENT_ID=default
+# WWEBJS_DATA_PATH=./.wwebjs_auth
+# AUTH_TIMEOUT_MS=120000
+# QR_MAX_RETRIES=5
+# INIT_WARNING_TIMEOUT_MS=45000
+# HISTORY_SCAN_LIMIT=2000
+# TITLE_FETCH_TIMEOUT_MS=2000
+# RECENT_HASH_CACHE_SIZE=50000
+# DEBUG_GROUP_MATCH=false
+
+# SMTP (approval notification emails)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=your_email@gmail.com
+SMTP_PASS=your_16_char_gmail_app_password
+SMTP_FROM="SharePulse Analytics <your_email@gmail.com>"
+
+# Runtime ownership marker (/health and /version)
+APP_NAME="SharePulse Analytics"
+APP_OWNER="Chirag Koyande"
+APP_REPO_URL="https://github.com/chiragkoyande/SharePulse-Analytics"
+# Optional: auto fallback order is COMMIT_SHA -> GITHUB_SHA -> RENDER_GIT_COMMIT -> git rev-parse
+COMMIT_SHA=70b6239
+# Optional: defaults to server start timestamp
+BUILD_DATE="2026-03-06T10:30:00.000Z"
 ```
 
-**Where to find Supabase keys:**
-- Go to **Settings** → **API** in your Supabase dashboard
-- **Project URL** → `SUPABASE_URL`
-- **service_role key** (under Project API keys) → `SUPABASE_SERVICE_ROLE_KEY`
-
----
-
-### Step 4: Install & Run Backend
+Install and run backend:
 
 ```bash
 cd backend
-npm install
-npm start
-```
-
-> If you set `PUPPETEER_SKIP_DOWNLOAD=true`, you must have a valid Chrome binary and set `CHROME_PATH` correctly.
-
----
-
-### Step 5: Connect WhatsApp
-
-1. If `HEADLESS=false`, a controlled browser window opens for QR scan. If `HEADLESS=true`, QR prints in terminal.
-2. On your phone: **WhatsApp → Settings → Linked Devices → Link a Device**
-3. Scan the QR code
-4. Wait for `✅ WhatsApp client is ready!` in the terminal
-
-> Note: `whatsapp-web.js` controls its own Puppeteer browser session. It cannot attach to your already-open personal Chrome/WhatsApp tab.
-
----
-
-### Step 6: Find Your Group ID
-
-After connecting, send a message in **any WhatsApp group**. The console will print:
-
-```
-📋 Group: "Your Group Name" → 120363XXXXXXXXXX@g.us
-```
-
-Copy the ID (ending in `@g.us`) and update `backend/.env`:
-
-```env
-TARGET_GROUP_ID=120363XXXXXXXXXX@g.us
-```
-
-Then restart the backend (`Ctrl+C` then `npm start`).
-
----
-
-### Step 7: Configure & Run Frontend
-
-Open a **new terminal**:
-
-```bash
-cd frontend
-cp .env.example .env
 npm install
 npm run dev
 ```
 
-Open **http://localhost:5173** in your browser 🎉
+## 3) Frontend Setup
+Create `frontend/.env`:
 
----
+```env
+VITE_SUPABASE_URL=https://your-project-id.supabase.co
+VITE_SUPABASE_ANON_KEY=your_anon_key
+VITE_API_URL=http://localhost:3001
+```
 
-## 🔌 API Endpoints
+Install and run frontend:
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/health` | Server health check |
-| GET | `/resources` | All resources (newest first) |
-| GET | `/resources?limit=50&offset=0` | Paginated resources |
-| GET | `/resources/search?q=github` | Search by URL, title, or sender |
-| GET | `/stats` | Total, duplicates, today's count, top 5 domains |
-| GET | `/saved-links` | Current user's saved link hashes (auth required) |
-| POST | `/save-link` | Save/unsave a link for current user (auth required) |
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
----
+Open `http://localhost:5173`.
 
-## 🛡️ Security Notes
+## Access Workflow
+1. User submits request from login page (`/auth/request-access`).
+2. Admin reviews pending requests in Admin panel.
+3. Admin approves (`/admin/approve`) or rejects.
+4. On approval:
+- Supabase auth account is created/updated.
+- `app_users` role/status is activated.
+- Approval email is sent via SMTP if configured.
+5. User signs in using requested email/password.
 
-- All secrets are stored in `.env` files (never committed to Git)
-- `SUPABASE_SERVICE_ROLE_KEY` is **backend only** — never exposed to frontend
-- SQL queries use Supabase client (parameterized, no injection risk)
-- `.gitignore` excludes `.env`, `node_modules`, and WhatsApp session data
+## API Reference
 
----
+Base URL: `http://localhost:3001`
 
-## 🧩 Advanced Features (Placeholders)
+### Public / Utility
+- `GET /health` -> server status + ownership metadata
+- `GET /version` -> ownership marker object
+- `GET /resources?sort=newest|popular&limit=100&offset=0`
+- `GET /resources/search?q=keyword`
+- `GET /stats`
+- `GET /export/csv`
 
-The codebase includes placeholder functions for:
+### Auth
+- `POST /auth/request-access`
+- `POST /auth/login`
 
-- 🤖 `generateSummary()` — AI-powered link summarization (OpenAI/Gemini)
-- 🛡️ `detectPhishing()` — Malicious URL detection (Google Safe Browsing)
-- 📊 Multi-group support
-- 📈 Weekly analytics
+### User (Bearer token required)
+- `POST /vote` body: `{ "url_hash": "...", "vote": "like" | "dislike" }`
+- `GET /saved-links`
+- `POST /save-link` body: `{ "url_hash": "...", "save": true | false }`
 
----
+### Admin (Bearer token + admin role required)
+- `GET /admin/requests?status=pending`
+- `POST /admin/approve` body: `{ "email": "user@example.com" }`
+- `POST /admin/reject` body: `{ "email": "user@example.com" }`
+- `GET /admin/users`
+- `POST /admin/promote` body: `{ "email": "user@example.com" }`
+- `POST /admin/revoke` body: `{ "email": "user@example.com" }`
 
-## 📄 License
+## Ownership Marker Example
+`GET /version`:
 
+```json
+{
+  "success": true,
+  "ownership": {
+    "appName": "SharePulse Analytics",
+    "owner": "Chirag Koyande",
+    "repoUrl": "https://github.com/chiragkoyande/SharePulse-Analytics",
+    "commitSha": "70b6239",
+    "buildDate": "2026-03-05T23:21:13.323Z"
+  }
+}
+```
+
+## Troubleshooting
+
+### `EADDRINUSE: address already in use :::3001`
+Another backend is already running.
+
+```bash
+lsof -ti :3001 | xargs -r kill -9
+cd backend && npm run dev
+```
+
+### `Cannot GET /version`
+Usually old backend process is running. Restart backend and retry.
+
+### WhatsApp init error: browser already running
+Use one bot session at a time, or change:
+- `WWEBJS_CLIENT_ID`
+- `WWEBJS_DATA_PATH`
+
+If session is corrupted, stop bot and remove `.wwebjs_auth`, then re-link QR.
+
+### Approval email not sent
+Check:
+- `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` in `backend/.env`
+- Gmail account has 2FA enabled
+- `SMTP_PASS` is a Google app password (not normal Gmail password)
+
+## Security and Privacy Notes
+- Backend uses Supabase service role key; never expose it to frontend.
+- Bot stores link-level analytics only; no raw chat payload persistence.
+- Role checks enforce active users and admin-only routes.
+- Keep `.env` files private and out of git.
+
+## License
 ISC
-
----
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request

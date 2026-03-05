@@ -5,6 +5,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import { execSync } from 'node:child_process';
 import { testConnection, supabase } from './db.js';
 import resourceRoutes from './routes/resources.js';
 import authRoutes from './routes/auth.js';
@@ -17,20 +18,52 @@ const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 const ADMIN_RESET_PASSWORD_ON_START = process.env.ADMIN_RESET_PASSWORD_ON_START === 'true';
 
+function resolveCommitSha() {
+    if (process.env.COMMIT_SHA) return process.env.COMMIT_SHA;
+    if (process.env.GITHUB_SHA) return process.env.GITHUB_SHA;
+    if (process.env.RENDER_GIT_COMMIT) return process.env.RENDER_GIT_COMMIT;
+    try {
+        return execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+            .toString()
+            .trim();
+    } catch {
+        return 'unknown';
+    }
+}
+
+const ownershipMarker = {
+    appName: process.env.APP_NAME || 'SharePulse Analytics',
+    owner: process.env.APP_OWNER || 'Chirag Koyande',
+    repoUrl: process.env.APP_REPO_URL || 'https://github.com/chiragkoyande/SharePulse-Analytics',
+    commitSha: resolveCommitSha(),
+    buildDate: process.env.BUILD_DATE || new Date().toISOString(),
+};
+
 // ── Middleware ────────────────────────────────
 
 app.use(cors());
 app.use(express.json());
 
 app.use((req, _res, next) => {
-    if (req.path !== '/health') console.log(`→ ${req.method} ${req.path}`);
+    if (req.path !== '/health' && req.path !== '/version') console.log(`→ ${req.method} ${req.path}`);
     next();
 });
 
 // ── Routes ───────────────────────────────────
 
 app.get('/health', (_req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    res.json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        ownership: ownershipMarker,
+    });
+});
+
+app.get('/version', (_req, res) => {
+    res.json({
+        success: true,
+        ownership: ownershipMarker,
+    });
 });
 
 app.use('/', authRoutes);
@@ -126,6 +159,7 @@ async function start() {
     app.listen(PORT, () => {
         console.log(`\n🌐 API server running at http://localhost:${PORT}`);
         console.log('   GET  /health');
+        console.log('   GET  /version');
         console.log('   POST /auth/request-access');
         console.log('   POST /auth/login');
         console.log('   GET  /admin/requests');
