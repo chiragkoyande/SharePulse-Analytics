@@ -42,14 +42,31 @@ router.post('/auth/request-access', async (req, res, next) => {
         }
 
         // Check if already an active user
-        const { data: existingUser } = await supabase
+        const { data: existingUser, error: userLookupErr } = await supabase
             .from('app_users')
             .select('id, status')
             .eq('email', normalizedEmail)
-            .single();
+            .maybeSingle();
+        if (userLookupErr) throw userLookupErr;
 
         if (existingUser && existingUser.status === 'active') {
-            return res.status(400).json({ success: false, error: 'This email already has access' });
+            // Active user with at least one workspace membership should not request again.
+            const { count: membershipCount, error: memberCountErr } = await supabase
+                .from('workspace_members')
+                .select('id', { count: 'exact', head: true })
+                .eq('user_email', normalizedEmail);
+            if (memberCountErr) throw memberCountErr;
+
+            if ((membershipCount || 0) > 0) {
+                return res.status(400).json({ success: false, error: 'This email already has access' });
+            }
+
+            // Stale active status with zero memberships: mark revoked and allow re-request.
+            const { error: staleStatusErr } = await supabase
+                .from('app_users')
+                .update({ status: 'revoked' })
+                .eq('email', normalizedEmail);
+            if (staleStatusErr) throw staleStatusErr;
         }
 
         // Check if request already pending

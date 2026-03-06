@@ -10,10 +10,29 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 const USES_NGROK_API = /ngrok-free\.(app|dev)/.test(API_BASE);
 
 function backendFetch(url, options = {}) {
-    if (!USES_NGROK_API) return fetch(url, options);
-    const headers = new Headers(options.headers || {});
-    headers.set('ngrok-skip-browser-warning', 'true');
-    return fetch(url, { ...options, headers });
+    const controller = new AbortController();
+    const timeoutMs = Number(import.meta.env.VITE_API_TIMEOUT_MS || 15000);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const doFetch = () => {
+        if (!USES_NGROK_API) {
+            return fetch(url, { ...options, signal: controller.signal });
+        }
+        const headers = new Headers(options.headers || {});
+        headers.set('ngrok-skip-browser-warning', 'true');
+        return fetch(url, { ...options, headers, signal: controller.signal });
+    };
+    return doFetch()
+        .catch((err) => {
+            const msg = String(err?.message || err);
+            if (err?.name === 'AbortError') {
+                throw new Error('Request timed out. Backend/tunnel may be offline.');
+            }
+            if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Load failed')) {
+                throw new Error('Cannot reach backend API. Check ngrok URL and local backend.');
+            }
+            throw err;
+        })
+        .finally(() => clearTimeout(timer));
 }
 
 export function AuthProvider({ children }) {
