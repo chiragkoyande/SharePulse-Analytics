@@ -1,6 +1,8 @@
 // ============================================
 // Express Routes — Resources, Voting, Export
 // ============================================
+// All data queries scoped by workspace_id.
+// ============================================
 
 import { Router } from 'express';
 import { supabase } from '../db.js';
@@ -8,18 +10,30 @@ import { requireAuth } from '../middleware/authMiddleware.js';
 
 const router = Router();
 
+/**
+ * Helper: resolve workspace_id from query/body.
+ * Super admins can omit workspace_id for global view.
+ */
+function getWorkspaceScope(req) {
+    return req.query.workspace_id || req.body?.workspace_id || null;
+}
+
 // ── GET /resources ───────────────────────────
-// Supports ?sort=popular|newest (default: newest)
 
 router.get('/resources', async (req, res, next) => {
     try {
+        const sort = req.query.sort || 'newest';
         const limit = Math.min(parseInt(req.query.limit) || 100, 500);
         const offset = parseInt(req.query.offset) || 0;
-        const sort = req.query.sort || 'newest';
+        const workspaceId = getWorkspaceScope(req);
 
         let query = supabase
             .from('resources')
             .select('*', { count: 'exact' });
+
+        if (workspaceId) {
+            query = query.eq('workspace_id', workspaceId);
+        }
 
         if (sort === 'popular') {
             query = query
@@ -45,12 +59,19 @@ router.get('/resources', async (req, res, next) => {
 router.get('/resources/search', async (req, res, next) => {
     try {
         const q = req.query.q || '';
+        const workspaceId = getWorkspaceScope(req);
         if (!q.trim()) return res.json({ success: true, count: 0, data: [] });
 
-        const { data, error } = await supabase
+        let query = supabase
             .from('resources')
             .select('*')
-            .or(`url.ilike.%${q}%,title.ilike.%${q}%,domain.ilike.%${q}%`)
+            .or(`url.ilike.%${q}%,title.ilike.%${q}%,domain.ilike.%${q}%`);
+
+        if (workspaceId) {
+            query = query.eq('workspace_id', workspaceId);
+        }
+
+        const { data, error } = await query
             .order('created_at', { ascending: false })
             .limit(100);
 
@@ -66,15 +87,21 @@ router.get('/resources/search', async (req, res, next) => {
 
 router.get('/stats', async (req, res, next) => {
     try {
+        const workspaceId = getWorkspaceScope(req);
+
         // Total count
-        const { count: total } = await supabase
+        let totalQuery = supabase
             .from('resources')
             .select('*', { count: 'exact', head: true });
+        if (workspaceId) totalQuery = totalQuery.eq('workspace_id', workspaceId);
+        const { count: total } = await totalQuery;
 
         // All resources for aggregation
-        const { data: all } = await supabase
+        let allQuery = supabase
             .from('resources')
-            .select('url, domain, share_count, like_count, dislike_count');
+            .select('share_count, like_count, dislike_count, domain');
+        if (workspaceId) allQuery = allQuery.eq('workspace_id', workspaceId);
+        const { data: all } = await allQuery;
 
         // Compute totals
         let totalShares = 0;
@@ -95,11 +122,13 @@ router.get('/stats', async (req, res, next) => {
             .slice(0, 5);
 
         // Today's count
-        const today = new Date().toISOString().split('T')[0];
-        const { count: todayCount } = await supabase
+        const todayStr = new Date().toISOString().split('T')[0];
+        let todayQuery = supabase
             .from('resources')
             .select('*', { count: 'exact', head: true })
-            .gte('created_at', today);
+            .gte('created_at', todayStr);
+        if (workspaceId) todayQuery = todayQuery.eq('workspace_id', workspaceId);
+        const { count: todayCount } = await todayQuery;
 
         res.json({
             success: true,
@@ -111,6 +140,46 @@ router.get('/stats', async (req, res, next) => {
                 topDomains,
             },
         });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// ── DELETE /resources/:id ───────────────────
+// Admin or super_admin can remove a link.
+router.delete('/resources/:id', requireAuth, async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        if (!id) return res.status(400).json({ success: false, error: 'Resource id is required' });
+
+        if (!['admin', 'super_admin'].includes(req.user?.role)) {
+            return res.status(403).json({ success: false, error: 'Admin access required' });
+        }
+
+        const { data: resource, error: fetchErr } = await supabase
+            .from('resources')
+            .select('id, workspace_id')
+            .eq('id', id)
+            .maybeSingle();
+
+        if (fetchErr) throw fetchErr;
+        if (!resource) return res.status(404).json({ success: false, error: 'Resource not found' });
+
+        if (!req.user.isSuperAdmin) {
+            const member = (req.user.workspaces || []).find((w) => w.id === resource.workspace_id);
+            const allowed = member && ['admin', 'owner'].includes(member.role);
+            if (!allowed) {
+                return res.status(403).json({ success: false, error: 'No admin access for this workspace' });
+            }
+        }
+
+        const { error: delErr } = await supabase
+            .from('resources')
+            .delete()
+            .eq('id', id);
+        if (delErr) throw delErr;
+
+        res.json({ success: true, message: 'Resource removed', id });
     } catch (error) {
         next(error);
     }
@@ -155,13 +224,8 @@ router.post('/vote', requireAuth, async (req, res, next) => {
         if (!existingVote) {
             const { error: insertVoteErr } = await supabase
                 .from('resource_votes')
-                .insert({
-                    user_id: userId,
-                    url_hash,
-                    vote,
-                });
+                .insert({ user_id: userId, url_hash, vote });
             if (insertVoteErr) {
-                // Race-safe fallback: treat unique conflict as already voted and update vote type.
                 if (insertVoteErr.code === '23505') {
                     const { error: retryUpdateErr } = await supabase
                         .from('resource_votes')
@@ -177,24 +241,17 @@ router.post('/vote', requireAuth, async (req, res, next) => {
             const { count: likeCount } = await supabase
                 .from('resource_votes')
                 .select('*', { count: 'exact', head: true })
-                .eq('url_hash', url_hash)
-                .eq('vote', 'like');
-
+                .eq('url_hash', url_hash).eq('vote', 'like');
             const { count: dislikeCount } = await supabase
                 .from('resource_votes')
                 .select('*', { count: 'exact', head: true })
-                .eq('url_hash', url_hash)
-                .eq('vote', 'dislike');
-
+                .eq('url_hash', url_hash).eq('vote', 'dislike');
             return res.json({
-                success: true,
-                unchanged: true,
+                success: true, unchanged: true,
                 message: `You already voted "${vote}" for this link`,
-                like_count: likeCount || 0,
-                dislike_count: dislikeCount || 0,
+                like_count: likeCount || 0, dislike_count: dislikeCount || 0,
             });
         } else {
-            // Switch vote type (like <-> dislike)
             const { error: switchErr } = await supabase
                 .from('resource_votes')
                 .update({ vote, updated_at: new Date().toISOString() })
@@ -202,28 +259,19 @@ router.post('/vote', requireAuth, async (req, res, next) => {
             if (switchErr) throw switchErr;
         }
 
-        // Recalculate counts from canonical vote records
+        // Recalculate counts
         const { count: likeCount } = await supabase
             .from('resource_votes')
             .select('*', { count: 'exact', head: true })
-            .eq('url_hash', url_hash)
-            .eq('vote', 'like');
-
+            .eq('url_hash', url_hash).eq('vote', 'like');
         const { count: dislikeCount } = await supabase
             .from('resource_votes')
             .select('*', { count: 'exact', head: true })
-            .eq('url_hash', url_hash)
-            .eq('vote', 'dislike');
+            .eq('url_hash', url_hash).eq('vote', 'dislike');
 
-        const { error: updateErr } = await supabase
-            .from('resources')
-            .update({
-                like_count: likeCount || 0,
-                dislike_count: dislikeCount || 0,
-            })
+        await supabase.from('resources')
+            .update({ like_count: likeCount || 0, dislike_count: dislikeCount || 0 })
             .eq('id', data[0].id);
-
-        if (updateErr) throw updateErr;
 
         res.json({
             success: true,
@@ -262,7 +310,6 @@ router.get('/saved-links', requireAuth, async (req, res, next) => {
 });
 
 // ── POST /save-link ──────────────────────────
-// Body: { url_hash: string, save: boolean }
 
 router.post('/save-link', requireAuth, async (req, res, next) => {
     try {
@@ -289,11 +336,7 @@ router.post('/save-link', requireAuth, async (req, res, next) => {
         if (save) {
             const { error: insertErr } = await supabase
                 .from('resource_saves')
-                .insert({
-                    user_id: userId,
-                    url_hash,
-                });
-
+                .insert({ user_id: userId, url_hash });
             if (insertErr && insertErr.code !== '23505') throw insertErr;
         } else {
             const { error: deleteErr } = await supabase
@@ -301,7 +344,6 @@ router.post('/save-link', requireAuth, async (req, res, next) => {
                 .delete()
                 .eq('user_id', userId)
                 .eq('url_hash', url_hash);
-
             if (deleteErr) throw deleteErr;
         }
 
@@ -319,21 +361,27 @@ router.post('/save-link', requireAuth, async (req, res, next) => {
 
 router.get('/export/csv', async (req, res, next) => {
     try {
-        const { data, error } = await supabase
+        const workspaceId = getWorkspaceScope(req);
+
+        let query = supabase
             .from('resources')
-            .select('url, title, domain, like_count, dislike_count, share_count, created_at')
+            .select('url, url_hash, title, domain, like_count, dislike_count, share_count, created_at')
             .order('created_at', { ascending: false });
+
+        if (workspaceId) {
+            query = query.eq('workspace_id', workspaceId);
+        }
+
+        const { data, error } = await query;
 
         if (error) throw error;
 
-        // Build CSV
         const headers = ['url', 'title', 'domain', 'like_count', 'dislike_count', 'share_count', 'created_at'];
         const csvRows = [headers.join(',')];
 
         (data || []).forEach((row) => {
             const values = headers.map((h) => {
                 const val = row[h] ?? '';
-                // Escape commas and quotes in values
                 const str = String(val).replace(/"/g, '""');
                 return `"${str}"`;
             });
