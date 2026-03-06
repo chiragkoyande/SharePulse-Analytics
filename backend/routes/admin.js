@@ -369,6 +369,18 @@ router.post('/revoke', async (req, res, next) => {
         if (!hasWorkspaceAdminAccess(req, workspace_id)) {
             return res.status(403).json({ success: false, error: 'No admin access for selected workspace' });
         }
+        if (!req.user?.isSuperAdmin) {
+            const { data: targetMembership, error: targetMemErr } = await supabase
+                .from('workspace_members')
+                .select('role')
+                .eq('workspace_id', workspace_id)
+                .eq('user_email', normalizedEmail)
+                .maybeSingle();
+            if (targetMemErr) throw targetMemErr;
+            if (targetMembership?.role === 'owner') {
+                return res.status(403).json({ success: false, error: 'Admins cannot revoke workspace owners' });
+            }
+        }
 
         // Prevent self-revoke
         if (normalizedEmail === req.user.email) {

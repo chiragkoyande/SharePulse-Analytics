@@ -257,12 +257,25 @@ router.put('/workspaces/:workspace_id/members/:email', requireAuth, requireWorks
 router.delete('/workspaces/:workspace_id/members/:email', requireAuth, requireWorkspaceAccess('admin'), async (req, res, next) => {
     try {
         const { workspace_id, email } = req.params;
+        const normalizedEmail = email.toLowerCase().trim();
+
+        const { data: targetMember, error: targetErr } = await supabase
+            .from('workspace_members')
+            .select('role')
+            .eq('workspace_id', workspace_id)
+            .eq('user_email', normalizedEmail)
+            .maybeSingle();
+        if (targetErr) throw targetErr;
+        if (!targetMember) return res.status(404).json({ success: false, error: 'Member not found' });
+        if (targetMember.role === 'owner' && !req.user?.isSuperAdmin) {
+            return res.status(403).json({ success: false, error: 'Admins cannot remove workspace owners' });
+        }
 
         const { error } = await supabase
             .from('workspace_members')
             .delete()
             .eq('workspace_id', workspace_id)
-            .eq('user_email', email.toLowerCase().trim());
+            .eq('user_email', normalizedEmail);
 
         if (error) throw error;
         res.json({ success: true, message: `${email} removed from workspace` });

@@ -382,7 +382,7 @@ export default function AdminPanel({ onClose }) {
                                         {u.role !== 'admin' && u.role !== 'owner' && u.role !== 'super_admin' && u.status === 'active' && selectedWorkspaceId && (
                                             <button className="admin-btn admin-btn--promote" onClick={() => doAction('promote', { email: u.email, workspace_id: selectedWorkspaceId })}>Promote</button>
                                         )}
-                                        {u.status === 'active' && u.role !== 'super_admin' && selectedWorkspaceId && (
+                                        {u.status === 'active' && u.role !== 'super_admin' && u.role !== 'owner' && selectedWorkspaceId && (
                                             <button
                                                 className="admin-btn admin-btn--revoke"
                                                 onClick={() => doAction('revoke', {
@@ -551,7 +551,9 @@ export default function AdminPanel({ onClose }) {
                                             <span className={`admin-role-badge admin-role-badge--${m.role}`}>{m.role}</span>
                                         </div>
                                         <div className="admin-item__actions">
-                                            <button className="admin-btn admin-btn--revoke" onClick={() => handleRemoveMember(m.user_email)}>Remove</button>
+                                            {m.role !== 'owner' && (
+                                                <button className="admin-btn admin-btn--revoke" onClick={() => handleRemoveMember(m.user_email)}>Remove</button>
+                                            )}
                                         </div>
                                     </div>
                                 ))
