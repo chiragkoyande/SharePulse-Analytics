@@ -106,6 +106,16 @@ git clone https://github.com/chiragkoyande/SharePulse-Analytics.git
 cd SharePulse-Analytics
 ```
 
+### Local Dev Command Summary
+
+```bash
+# backend
+cd backend && npm install && npm run dev
+
+# frontend
+cd frontend && npm install && npm run dev
+```
+
 ### 2) Database Migrations (Supabase SQL Editor)
 
 Run in order:
