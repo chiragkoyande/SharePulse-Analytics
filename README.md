@@ -350,6 +350,17 @@ Common causes:
 - Duplicate in same workspace (now counted as re-share)
 - Frontend is on different workspace than where link was ingested
 
+## FAQ
+
+### Why are LinkedIn links not saved?
+`linkedin.com` is blacklisted by default in `backend/utils/blacklist.js`.
+
+### Why do I see duplicate logs?
+If same URL is re-shared, dedupe logic skips creating a new row and updates engagement counters.
+
+### Can one URL exist in multiple workspaces?
+Yes. Workspace-aware hashing allows same normalized URL across different workspaces.
+
 ## Ownership Marker (`/version`)
 
 ```json
