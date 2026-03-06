@@ -268,6 +268,19 @@ Base URL: `http://localhost:3001`
 - `POST /admin/revoke`
 - `POST /admin/rescan-history`
 
+### Quick API Examples
+
+```bash
+# Check version marker
+curl http://localhost:3001/version
+
+# Queue rescan for a specific group (admin token required)
+curl -X POST http://localhost:3001/admin/rescan-history \\
+  -H \"Content-Type: application/json\" \\
+  -H \"Authorization: Bearer <ADMIN_JWT>\" \\
+  -d '{\"whatsapp_group_id\":\"120363XXXXXXXXXXXX@g.us\"}'
+```
+
 ## Access Workflow
 
 1. User submits access request from login page.
