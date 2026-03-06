@@ -1,15 +1,16 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { fetchResources, searchResources, fetchStats, voteResource, exportCsv, fetchSavedLinks, saveResource } from './api';
+import { fetchResources, searchResources, fetchStats, voteResource, exportCsv, fetchSavedLinks, saveResource, deleteResource } from './api';
 import { useAuth } from './components/AuthContext';
 import LoginPage from './components/LoginPage';
 import AdminPanel from './components/AdminPanel';
 import StatsCard from './components/StatsCard';
 import SearchBar from './components/SearchBar';
 import ResourceTable from './components/ResourceTable';
+import WorkspaceSwitcher from './components/WorkspaceSwitcher';
 
 export default function App() {
     const DEFAULT_PAGE_SIZE = 50;
-    const { isAuthenticated, isAdmin, user, token, logout, loading: authLoading } = useAuth();
+    const { isAuthenticated, isAdmin, isSuperAdmin, user, token, logout, loading: authLoading, activeWorkspaceId, activeWorkspace } = useAuth();
     const [resources, setResources] = useState([]);
     const [stats, setStats] = useState({ total: 0, totalShares: 0, totalVotes: 0, today: 0 });
     const [loading, setLoading] = useState(true);
@@ -38,8 +39,8 @@ export default function App() {
         setLoading(true);
         try {
             const [resourceData, statsData] = await Promise.all([
-                fetchResources(sortMode),
-                fetchStats(),
+                fetchResources(sortMode, activeWorkspaceId),
+                fetchStats(activeWorkspaceId),
             ]);
             let savedData = [];
             try {
@@ -60,7 +61,7 @@ export default function App() {
         } finally {
             setLoading(false);
         }
-    }, [sortMode, token]);
+    }, [sortMode, token, activeWorkspaceId]);
 
     useEffect(() => {
         if (isAuthenticated) loadData();
@@ -75,8 +76,8 @@ export default function App() {
             setLoading(true);
             try {
                 const data = query.trim()
-                    ? await searchResources(query)
-                    : await fetchResources(sortMode);
+                    ? await searchResources(query, activeWorkspaceId)
+                    : await fetchResources(sortMode, activeWorkspaceId);
                 setResources((data || []).map((r) => ({
                     ...r,
                     is_saved: savedHashes.has(r.url_hash),
@@ -87,7 +88,7 @@ export default function App() {
                 setLoading(false);
             }
         }, 400);
-    }, [sortMode, savedHashes]);
+    }, [sortMode, savedHashes, activeWorkspaceId]);
 
     // ── Sort Change ──────────────────────────
     const handleSortChange = useCallback((e) => {
@@ -131,14 +132,30 @@ export default function App() {
         }
     }, [token]);
 
+    const handleDeleteResource = useCallback(async (resourceId) => {
+        if (!isAdmin) return;
+        try {
+            await deleteResource(resourceId, token);
+            setResources((prev) => prev.filter((r) => r.id !== resourceId));
+            setSavedHashes((prev) => {
+                const next = new Set(prev);
+                const removed = resources.find((r) => r.id === resourceId);
+                if (removed?.url_hash) next.delete(removed.url_hash);
+                return next;
+            });
+        } catch (err) {
+            console.error('Delete resource error:', err.message);
+        }
+    }, [isAdmin, token, resources]);
+
     // ── CSV Export ────────────────────────────
     const handleExport = useCallback(async () => {
         try {
-            await exportCsv();
+            await exportCsv(activeWorkspaceId);
         } catch (err) {
             console.error('Export error:', err.message);
         }
-    }, []);
+    }, [activeWorkspaceId]);
 
     // ── Popular Links (Top 5) ────────────────
     const popularLinks = useMemo(() => {
@@ -197,7 +214,8 @@ export default function App() {
     useEffect(() => {
         setCurrentPage(1);
         setVisibleCount(pageSize);
-    }, [searchQuery, selectedDomain, savedOnly, sortMode, pageSize, infiniteScroll]);
+    }, [searchQuery, selectedDomain, savedOnly, sortMode, pageSize, infiniteScroll, activeWorkspaceId]);
+
 
     useEffect(() => {
         if (!infiniteScroll || loading || !hasMoreInfinite) return;
@@ -284,10 +302,16 @@ export default function App() {
                 </div>
             </header>
 
+            <WorkspaceSwitcher />
+
             <main className="main">
                 <section className="dashboard-hero">
                     <div className="dashboard-hero__content">
-                        <span className="dashboard-hero__eyebrow">Workspace Overview</span>
+                        <span className="dashboard-hero__eyebrow">
+                            {activeWorkspace
+                                ? `Workspace: ${activeWorkspace.name}`
+                                : 'All Workspaces Overview'}
+                        </span>
                         <h2>See what your community shares and what drives engagemen</h2>
                         <p>
                             Track what your community shares, rank valuable domains, and measure engagement signals in one place.
@@ -434,6 +458,8 @@ export default function App() {
                         loading={loading}
                         onVote={handleVote}
                         onSave={handleSave}
+                        canDelete={isAdmin}
+                        onDelete={handleDeleteResource}
                     />
                 </section>
 

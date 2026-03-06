@@ -104,7 +104,12 @@ export default function LoginPage() {
 
             <div className="login-card">
                 <div className="login-card__header">
-                    <span className="login-card__logo">SP</span>
+                    <div className="login-card__logo" aria-hidden="true">
+                        <span className="login-card__logo-corner"></span>
+                        <span className="login-card__logo-line login-card__logo-line--1"></span>
+                        <span className="login-card__logo-line login-card__logo-line--2"></span>
+                        <span className="login-card__logo-line login-card__logo-line--3"></span>
+                    </div>
                     <h1>SharePulse Analytics</h1>
                     <p>Sign in or request workspace access</p>
                 </div>
@@ -235,7 +240,7 @@ export default function LoginPage() {
                             </div>
                         </div>
                         <p className="login-hint">
-                            Create your own password. Admins can only view your email and request status.
+                            Create your own password. Admin will assign your workspace during approval.
                         </p>
                         <button type="submit" className="login-submit login-submit--request" disabled={!canSubmitRequest}>
                             {submitting ? 'Submitting...' : 'Request Access'}

@@ -4,7 +4,7 @@ import React, { useState } from 'react';
  * ResourceTable — Desktop table view + mobile card view.
  * Privacy-first: No sender, group, or context data displayed.
  */
-export default function ResourceTable({ resources, loading, onVote, onSave }) {
+export default function ResourceTable({ resources, loading, onVote, onSave, canDelete = false, onDelete }) {
     if (loading) {
         return (
             <div className="resource-table__loading">
@@ -34,6 +34,7 @@ export default function ResourceTable({ resources, loading, onVote, onSave }) {
                         <th>Domain</th>
                         <th>Votes</th>
                         <th>Save</th>
+                        {canDelete && <th>Remove</th>}
                     </tr>
                 </thead>
                 <tbody>
@@ -54,6 +55,11 @@ export default function ResourceTable({ resources, loading, onVote, onSave }) {
                             <td>
                                 <SaveButton resource={r} onSave={onSave} />
                             </td>
+                            {canDelete && (
+                                <td>
+                                    <DeleteButton resource={r} onDelete={onDelete} />
+                                </td>
+                            )}
                         </tr>
                     ))}
                 </tbody>
@@ -75,6 +81,7 @@ export default function ResourceTable({ resources, loading, onVote, onSave }) {
                         <div className="resource-card__actions">
                             <VoteButtons resource={r} onVote={onVote} />
                             <SaveButton resource={r} onSave={onSave} />
+                            {canDelete && <DeleteButton resource={r} onDelete={onDelete} />}
                         </div>
                     </div>
                 ))}
@@ -142,6 +149,32 @@ function SaveButton({ resource, onSave }) {
             title={resource.is_saved ? 'Remove from saved' : 'Save this link'}
         >
             {resource.is_saved ? 'Saved' : 'Save'}
+        </button>
+    );
+}
+
+function DeleteButton({ resource, onDelete }) {
+    const [deleting, setDeleting] = useState(false);
+
+    const handleDelete = async () => {
+        if (!onDelete || deleting) return;
+        if (!window.confirm('Remove this link from workspace?')) return;
+        setDeleting(true);
+        try {
+            await onDelete(resource.id);
+        } finally {
+            setDeleting(false);
+        }
+    };
+
+    return (
+        <button
+            className={`resource-delete-btn ${deleting ? 'resource-delete-btn--loading' : ''}`}
+            onClick={handleDelete}
+            disabled={deleting}
+            title="Remove link"
+        >
+            {deleting ? 'Removing...' : 'Remove'}
         </button>
     );
 }
