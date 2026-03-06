@@ -383,6 +383,13 @@ Yes. Workspace-aware hashing allows same normalized URL across different workspa
 - Use strong `ACCESS_REQUEST_SECRET`.
 - Use SMTP app passwords, not normal mailbox passwords.
 
+### Security Checklist
+
+- Rotate service keys if they are ever shared accidentally.
+- Restrict admin account usage and enable strong unique passwords.
+- Do not run backend on public internet without HTTPS and CORS restrictions.
+- Regularly review `workspace_members` roles to prevent privilege drift.
+
 ## Roadmap
 
 - Better trust scoring and phishing hints
