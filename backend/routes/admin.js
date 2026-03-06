@@ -360,7 +360,7 @@ router.post('/promote', async (req, res, next) => {
 
 router.post('/revoke', async (req, res, next) => {
     try {
-        const { email, workspace_id } = req.body;
+        const { email, workspace_id, global } = req.body;
         if (!email || !workspace_id) {
             return res.status(400).json({ success: false, error: 'Email and workspace_id are required' });
         }
@@ -375,13 +375,25 @@ router.post('/revoke', async (req, res, next) => {
             return res.status(400).json({ success: false, error: 'Cannot revoke your own access' });
         }
 
-        const { data: deletedRows, error } = await supabase
-            .from('workspace_members')
-            .delete()
-            .eq('workspace_id', workspace_id)
-            .eq('user_email', normalizedEmail)
-            .select('id');
-        if (error) throw error;
+        let deletedRows = [];
+        if (global && req.user?.isSuperAdmin) {
+            const { data, error } = await supabase
+                .from('workspace_members')
+                .delete()
+                .eq('user_email', normalizedEmail)
+                .select('id');
+            if (error) throw error;
+            deletedRows = data || [];
+        } else {
+            const { data, error } = await supabase
+                .from('workspace_members')
+                .delete()
+                .eq('workspace_id', workspace_id)
+                .eq('user_email', normalizedEmail)
+                .select('id');
+            if (error) throw error;
+            deletedRows = data || [];
+        }
 
         if (!deletedRows || deletedRows.length === 0) {
             return res.status(404).json({ success: false, error: 'User is not a member of this workspace' });
@@ -403,7 +415,9 @@ router.post('/revoke', async (req, res, next) => {
 
         res.json({
             success: true,
-            message: `Workspace access revoked: ${normalizedEmail}`,
+            message: global && req.user?.isSuperAdmin
+                ? `Global access revoked: ${normalizedEmail}`
+                : `Workspace access revoked: ${normalizedEmail}`,
             workspace_memberships_remaining: remainingMemberships || 0,
         });
     } catch (error) {

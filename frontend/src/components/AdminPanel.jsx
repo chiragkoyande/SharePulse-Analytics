@@ -383,7 +383,16 @@ export default function AdminPanel({ onClose }) {
                                             <button className="admin-btn admin-btn--promote" onClick={() => doAction('promote', { email: u.email, workspace_id: selectedWorkspaceId })}>Promote</button>
                                         )}
                                         {u.status === 'active' && u.role !== 'super_admin' && selectedWorkspaceId && (
-                                            <button className="admin-btn admin-btn--revoke" onClick={() => doAction('revoke', { email: u.email, workspace_id: selectedWorkspaceId })}>Revoke</button>
+                                            <button
+                                                className="admin-btn admin-btn--revoke"
+                                                onClick={() => doAction('revoke', {
+                                                    email: u.email,
+                                                    workspace_id: selectedWorkspaceId,
+                                                    global: isSuperAdmin,
+                                                })}
+                                            >
+                                                {isSuperAdmin ? 'Revoke (All)' : 'Revoke'}
+                                            </button>
                                         )}
                                     </div>
                                 </div>

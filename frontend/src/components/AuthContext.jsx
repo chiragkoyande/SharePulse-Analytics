@@ -142,7 +142,10 @@ export function AuthProvider({ children }) {
         token,
         loading,
         isAuthenticated: !!user && !!token,
-        isAdmin: user?.role === 'admin' || user?.role === 'super_admin',
+        isAdmin:
+            user?.role === 'admin' ||
+            user?.role === 'super_admin' ||
+            !!workspaces.find((w) => ['admin', 'owner', 'super_admin'].includes(w.my_role)),
         isSuperAdmin: user?.role === 'super_admin',
         workspaces,
         activeWorkspaceId,

@@ -30,7 +30,10 @@ router.get('/workspaces', requireAuth, async (req, res, next) => {
                 .select('*')
                 .order('created_at', { ascending: true });
             if (error) throw error;
-            return res.json({ success: true, data: data || [] });
+            return res.json({
+                success: true,
+                data: (data || []).map((w) => ({ ...w, my_role: 'super_admin' })),
+            });
         }
 
         // Regular users: only their workspaces
@@ -46,7 +49,11 @@ router.get('/workspaces', requireAuth, async (req, res, next) => {
             .order('created_at', { ascending: true });
 
         if (error) throw error;
-        res.json({ success: true, data: data || [] });
+        const roleByWorkspaceId = new Map((req.user.workspaces || []).map((w) => [w.id, w.role]));
+        res.json({
+            success: true,
+            data: (data || []).map((w) => ({ ...w, my_role: roleByWorkspaceId.get(w.id) || 'member' })),
+        });
     } catch (error) {
         next(error);
     }
