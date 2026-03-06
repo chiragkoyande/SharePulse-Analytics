@@ -2,6 +2,14 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const USES_NGROK_API = /ngrok-free\.(app|dev)/.test(API_BASE);
+
+function backendFetch(url, options = {}) {
+    if (!USES_NGROK_API) return fetch(url, options);
+    const headers = new Headers(options.headers || {});
+    headers.set('ngrok-skip-browser-warning', 'true');
+    return fetch(url, { ...options, headers });
+}
 
 const WS_COLORS = [
     '#0ea5e9', '#a855f7', '#f97316', '#10b981',
@@ -70,15 +78,15 @@ export default function AdminPanel({ onClose }) {
         setLoading(true);
         try {
             const fetches = [
-                fetch(`${API_BASE}/admin/requests`, { headers: authHeaders }),
-                fetch(`${API_BASE}/admin/users${selectedWorkspaceId ? `?workspace_id=${encodeURIComponent(selectedWorkspaceId)}` : ''}`, { headers: authHeaders }),
-                fetch(`${API_BASE}/workspaces`, { headers: authHeaders }),
+                backendFetch(`${API_BASE}/admin/requests`, { headers: authHeaders }),
+                backendFetch(`${API_BASE}/admin/users${selectedWorkspaceId ? `?workspace_id=${encodeURIComponent(selectedWorkspaceId)}` : ''}`, { headers: authHeaders }),
+                backendFetch(`${API_BASE}/workspaces`, { headers: authHeaders }),
             ];
 
             if (selectedWorkspaceId) {
                 fetches.push(
-                    fetch(`${API_BASE}/workspaces/${selectedWorkspaceId}/members`, { headers: authHeaders }),
-                    fetch(`${API_BASE}/workspaces/${selectedWorkspaceId}/groups`, { headers: authHeaders }),
+                    backendFetch(`${API_BASE}/workspaces/${selectedWorkspaceId}/members`, { headers: authHeaders }),
+                    backendFetch(`${API_BASE}/workspaces/${selectedWorkspaceId}/groups`, { headers: authHeaders }),
                 );
             }
 
@@ -127,7 +135,7 @@ export default function AdminPanel({ onClose }) {
     const doAction = async (endpoint, body, successMsg) => {
         setActionMsg(null);
         try {
-            const res = await fetch(`${API_BASE}/admin/${endpoint}`, {
+            const res = await backendFetch(`${API_BASE}/admin/${endpoint}`, {
                 method: 'POST',
                 headers: authHeaders,
                 body: JSON.stringify(body),
@@ -157,7 +165,7 @@ export default function AdminPanel({ onClose }) {
         try {
             const url = editWsId ? `${API_BASE}/workspaces/${editWsId}` : `${API_BASE}/workspaces`;
             const method = editWsId ? 'PUT' : 'POST';
-            const res = await fetch(url, { method, headers: authHeaders, body: JSON.stringify(wsForm) });
+            const res = await backendFetch(url, { method, headers: authHeaders, body: JSON.stringify(wsForm) });
             const json = await res.json();
             if (!json.success) throw new Error(json.error);
 
@@ -176,7 +184,7 @@ export default function AdminPanel({ onClose }) {
     const handleWsDelete = async (id) => {
         if (!confirm('Delete this workspace? Resources will be unlinked.')) return;
         try {
-            const res = await fetch(`${API_BASE}/workspaces/${id}`, { method: 'DELETE', headers: authHeaders });
+            const res = await backendFetch(`${API_BASE}/workspaces/${id}`, { method: 'DELETE', headers: authHeaders });
             const json = await res.json();
             if (!json.success) throw new Error(json.error);
             setActionMsg({ type: 'success', text: 'Workspace deleted' });
@@ -196,7 +204,7 @@ export default function AdminPanel({ onClose }) {
             return;
         }
         try {
-            const res = await fetch(`${API_BASE}/workspaces/${selectedWorkspaceId}/members`, {
+            const res = await backendFetch(`${API_BASE}/workspaces/${selectedWorkspaceId}/members`, {
                 method: 'POST',
                 headers: authHeaders,
                 body: JSON.stringify({ email: memberEmail, role: memberRole }),
@@ -215,7 +223,7 @@ export default function AdminPanel({ onClose }) {
         if (!selectedWorkspaceId) return;
         if (!confirm(`Remove ${email}?`)) return;
         try {
-            const res = await fetch(`${API_BASE}/workspaces/${selectedWorkspaceId}/members/${encodeURIComponent(email)}`, {
+            const res = await backendFetch(`${API_BASE}/workspaces/${selectedWorkspaceId}/members/${encodeURIComponent(email)}`, {
                 method: 'DELETE',
                 headers: authHeaders,
             });
@@ -236,7 +244,7 @@ export default function AdminPanel({ onClose }) {
             return;
         }
         try {
-            const res = await fetch(`${API_BASE}/workspaces/${selectedWorkspaceId}/groups`, {
+            const res = await backendFetch(`${API_BASE}/workspaces/${selectedWorkspaceId}/groups`, {
                 method: 'POST',
                 headers: authHeaders,
                 body: JSON.stringify(waForm),
@@ -255,7 +263,7 @@ export default function AdminPanel({ onClose }) {
         if (!selectedWorkspaceId) return;
         if (!confirm('Disconnect this WhatsApp group?')) return;
         try {
-            const res = await fetch(`${API_BASE}/workspaces/${selectedWorkspaceId}/groups/${gid}`, {
+            const res = await backendFetch(`${API_BASE}/workspaces/${selectedWorkspaceId}/groups/${gid}`, {
                 method: 'DELETE',
                 headers: authHeaders,
             });
@@ -274,7 +282,7 @@ export default function AdminPanel({ onClose }) {
             return;
         }
         try {
-            const res = await fetch(`${API_BASE}/admin/rescan-history`, {
+            const res = await backendFetch(`${API_BASE}/admin/rescan-history`, {
                 method: 'POST',
                 headers: authHeaders,
                 body: JSON.stringify({ workspace_id: selectedWorkspaceId }),

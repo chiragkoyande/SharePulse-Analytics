@@ -7,6 +7,14 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const usesNgrokApi = /ngrok-free\.(app|dev)/.test(apiBase);
+
+function backendFetch(url, options = {}) {
+    if (!usesNgrokApi) return fetch(url, options);
+    const headers = new Headers(options.headers || {});
+    headers.set('ngrok-skip-browser-warning', 'true');
+    return fetch(url, { ...options, headers });
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
@@ -17,7 +25,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
  * @param {string} token Auth token
  */
 export async function fetchWorkspaces(token) {
-    const res = await fetch(`${apiBase}/workspaces`, {
+    const res = await backendFetch(`${apiBase}/workspaces`, {
         headers: { Authorization: `Bearer ${token}` },
     });
     const json = await res.json();
@@ -29,7 +37,7 @@ export async function fetchWorkspaces(token) {
  * Create a new workspace (super_admin only).
  */
 export async function createWorkspace(token, data) {
-    const res = await fetch(`${apiBase}/workspaces`, {
+    const res = await backendFetch(`${apiBase}/workspaces`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(data),
@@ -43,7 +51,7 @@ export async function createWorkspace(token, data) {
  * Update a workspace.
  */
 export async function updateWorkspace(token, workspaceId, data) {
-    const res = await fetch(`${apiBase}/workspaces/${workspaceId}`, {
+    const res = await backendFetch(`${apiBase}/workspaces/${workspaceId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(data),
@@ -57,7 +65,7 @@ export async function updateWorkspace(token, workspaceId, data) {
  * Delete a workspace (super_admin only).
  */
 export async function deleteWorkspace(token, workspaceId) {
-    const res = await fetch(`${apiBase}/workspaces/${workspaceId}`, {
+    const res = await backendFetch(`${apiBase}/workspaces/${workspaceId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
     });
@@ -70,7 +78,7 @@ export async function deleteWorkspace(token, workspaceId) {
  * List workspace members.
  */
 export async function fetchWorkspaceMembers(token, workspaceId) {
-    const res = await fetch(`${apiBase}/workspaces/${workspaceId}/members`, {
+    const res = await backendFetch(`${apiBase}/workspaces/${workspaceId}/members`, {
         headers: { Authorization: `Bearer ${token}` },
     });
     const json = await res.json();
@@ -82,7 +90,7 @@ export async function fetchWorkspaceMembers(token, workspaceId) {
  * Add member to workspace.
  */
 export async function addWorkspaceMember(token, workspaceId, email, role = 'member') {
-    const res = await fetch(`${apiBase}/workspaces/${workspaceId}/members`, {
+    const res = await backendFetch(`${apiBase}/workspaces/${workspaceId}/members`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ email, role }),
@@ -96,7 +104,7 @@ export async function addWorkspaceMember(token, workspaceId, email, role = 'memb
  * Remove member from workspace.
  */
 export async function removeWorkspaceMember(token, workspaceId, email) {
-    const res = await fetch(`${apiBase}/workspaces/${workspaceId}/members/${encodeURIComponent(email)}`, {
+    const res = await backendFetch(`${apiBase}/workspaces/${workspaceId}/members/${encodeURIComponent(email)}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
     });
@@ -109,7 +117,7 @@ export async function removeWorkspaceMember(token, workspaceId, email) {
  * List workspace WhatsApp groups.
  */
 export async function fetchWorkspaceGroups(token, workspaceId) {
-    const res = await fetch(`${apiBase}/workspaces/${workspaceId}/groups`, {
+    const res = await backendFetch(`${apiBase}/workspaces/${workspaceId}/groups`, {
         headers: { Authorization: `Bearer ${token}` },
     });
     const json = await res.json();
@@ -121,7 +129,7 @@ export async function fetchWorkspaceGroups(token, workspaceId) {
  * Add WhatsApp group to workspace.
  */
 export async function addWorkspaceGroup(token, workspaceId, whatsapp_group_id, name) {
-    const res = await fetch(`${apiBase}/workspaces/${workspaceId}/groups`, {
+    const res = await backendFetch(`${apiBase}/workspaces/${workspaceId}/groups`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ whatsapp_group_id, name }),
@@ -135,7 +143,7 @@ export async function addWorkspaceGroup(token, workspaceId, whatsapp_group_id, n
  * Remove WhatsApp group from workspace.
  */
 export async function removeWorkspaceGroup(token, workspaceId, groupId) {
-    const res = await fetch(`${apiBase}/workspaces/${workspaceId}/groups/${groupId}`, {
+    const res = await backendFetch(`${apiBase}/workspaces/${workspaceId}/groups/${groupId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
     });
@@ -237,7 +245,7 @@ export async function fetchStats(workspaceId = null) {
  * Vote on a resource link.
  */
 export async function voteResource(urlHash, vote, token) {
-    const res = await fetch(`${apiBase}/vote`, {
+    const res = await backendFetch(`${apiBase}/vote`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -254,7 +262,7 @@ export async function voteResource(urlHash, vote, token) {
  * Fetch saved link hashes.
  */
 export async function fetchSavedLinks(token) {
-    const res = await fetch(`${apiBase}/saved-links`, {
+    const res = await backendFetch(`${apiBase}/saved-links`, {
         headers: { Authorization: `Bearer ${token}` },
     });
     const json = await res.json();
@@ -266,7 +274,7 @@ export async function fetchSavedLinks(token) {
  * Save or unsave a link.
  */
 export async function saveResource(urlHash, save, token) {
-    const res = await fetch(`${apiBase}/save-link`, {
+    const res = await backendFetch(`${apiBase}/save-link`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -283,7 +291,7 @@ export async function saveResource(urlHash, save, token) {
  * Delete a resource by id (admin only).
  */
 export async function deleteResource(resourceId, token) {
-    const res = await fetch(`${apiBase}/resources/${resourceId}`, {
+    const res = await backendFetch(`${apiBase}/resources/${resourceId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
     });
@@ -299,7 +307,7 @@ export async function exportCsv(workspaceId = null) {
     const url = workspaceId
         ? `${apiBase}/export/csv?workspace_id=${workspaceId}`
         : `${apiBase}/export/csv`;
-    const res = await fetch(url);
+    const res = await backendFetch(url);
     if (!res.ok) throw new Error('Export failed');
 
     const blob = await res.blob();

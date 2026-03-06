@@ -7,6 +7,14 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 const AuthContext = createContext(null);
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const USES_NGROK_API = /ngrok-free\.(app|dev)/.test(API_BASE);
+
+function backendFetch(url, options = {}) {
+    if (!USES_NGROK_API) return fetch(url, options);
+    const headers = new Headers(options.headers || {});
+    headers.set('ngrok-skip-browser-warning', 'true');
+    return fetch(url, { ...options, headers });
+}
 
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);       // { email, role }
@@ -33,7 +41,7 @@ export function AuthProvider({ children }) {
     // Fetch workspaces on auth
     const loadWorkspaces = useCallback(async (authToken) => {
         try {
-            const res = await fetch(`${API_BASE}/workspaces`, {
+            const res = await backendFetch(`${API_BASE}/workspaces`, {
                 headers: { Authorization: `Bearer ${authToken}` },
             });
             const json = await res.json();
@@ -65,7 +73,7 @@ export function AuthProvider({ children }) {
     }, []);
 
     const login = useCallback(async (email, password) => {
-        const res = await fetch(`${API_BASE}/auth/login`, {
+        const res = await backendFetch(`${API_BASE}/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password }),
@@ -93,14 +101,14 @@ export function AuthProvider({ children }) {
     }, []);
 
     const fetchRequestWorkspaces = useCallback(async () => {
-        const res = await fetch(`${API_BASE}/auth/request-workspaces`);
+        const res = await backendFetch(`${API_BASE}/auth/request-workspaces`);
         const json = await res.json();
         if (!json.success) throw new Error(json.error || 'Failed to load workspaces');
         return json.data || [];
     }, []);
 
     const requestAccess = useCallback(async (email, password) => {
-        const res = await fetch(`${API_BASE}/auth/request-access`, {
+        const res = await backendFetch(`${API_BASE}/auth/request-access`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password }),
