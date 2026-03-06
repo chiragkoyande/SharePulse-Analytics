@@ -283,6 +283,14 @@ Base URL: `http://localhost:3001`
 - Same URL across different workspaces is supported with workspace-aware hashing.
 - Some domains are intentionally ignored by blacklist (for example LinkedIn by default).
 
+## Runtime Log Meanings
+
+- `✅ Saved` -> new resource inserted
+- `⏭️ duplicate-same-workspace` -> same link already exists in that workspace
+- `🔁 Share count +1` -> repeat share increased engagement
+- `⛔ Blacklisted URL skipped` -> URL matches blocked domain list
+- `⚠️ Could not find group` -> bot account cannot access that group id
+
 ## Troubleshooting
 
 ### `EADDRINUSE: address already in use :::3001`
