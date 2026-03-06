@@ -66,7 +66,6 @@ function collectMessageUrls(message) {
     const sources = [
         message?.body,
         message?.caption,
-        message?.description,
     ].filter((v) => typeof v === 'string' && v.trim().length > 0);
 
     const combinedText = sources.join('\n');
@@ -213,23 +212,7 @@ function getPuppeteerOptions() {
     return options;
 }
 
-async function fetchPageTitle(url) {
-    try {
-        const controller = new AbortController();
-        const t = setTimeout(() => controller.abort(), TITLE_FETCH_TIMEOUT_MS);
-        const response = await fetch(url, {
-            signal: controller.signal,
-            headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ResourceBot/1.0)' },
-        });
-        clearTimeout(t);
-        const html = await response.text();
-        const match = html.match(/<title[^>]*>([^<]*)<\/title>/i);
-        if (match && match[1]) return match[1].trim() || 'New Resource';
-        return 'New Resource';
-    } catch {
-        return 'New Resource';
-    }
-}
+
 
 async function resolveResourceHash({ legacyHash, scopedHash, workspaceId }) {
     try {
@@ -397,7 +380,7 @@ async function handleMessage(message, source = 'message') {
             continue;
         }
 
-        const title = await fetchPageTitle(url);
+        const title = 'New Resource'; // Title scraping disabled by user request
         const domain = extractDomain(url);
         const result = await saveResourceToDB({ url, urlHash: dedup.hashToUse, title, domain, workspaceId });
         if (result.saved || result.duplicate) markRecentHash(dedup.hashToUse);
@@ -459,7 +442,7 @@ async function scanHistoryForGroup(client, targetGroupId, reason = 'startup') {
                     skipped++;
                     continue;
                 }
-                const title = await fetchPageTitle(url);
+                const title = 'New Resource'; // Title scraping disabled
                 const domain = extractDomain(url);
                 const result = await saveResourceToDB({ url, urlHash: dedup.hashToUse, title, domain, workspaceId });
                 if (result.saved) { saved++; markRecentHash(dedup.hashToUse); }
