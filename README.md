@@ -397,6 +397,13 @@ Yes. Workspace-aware hashing allows same normalized URL across different workspa
 - Better admin analytics and moderation actions
 - Advanced filters and saved views
 
+## Current Limitations
+
+- WhatsApp Web session can disconnect and needs re-auth at times.
+- History scan speed depends on chat size and WhatsApp API response.
+- Default blacklist may hide some links your team wants to keep.
+- Without custom domain mail setup, production email deliverability can vary.
+
 ## Contributing
 
 - Keep PRs focused (one feature/fix per PR).
