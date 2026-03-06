@@ -426,6 +426,12 @@ Yes. Workspace-aware hashing allows same normalized URL across different workspa
 - Include logs/screenshots for bug reports.
 - Add migration notes if database schema changes.
 
+## Maintenance
+
+- Backup Supabase database before running new migrations in production.
+- Review and clean inactive workspaces/groups periodically.
+- Validate SMTP credentials after password/key rotation.
+
 ## License
 
 ISC
