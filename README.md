@@ -435,3 +435,10 @@ Yes. Workspace-aware hashing allows same normalized URL across different workspa
 ## License
 
 ISC
+
+## Recent Updates Snapshot
+
+- Workspace-aware group ingestion and admin assignment flow
+- Group history rescan queue endpoint for backfill
+- Improved dedupe behavior and duplicate re-share counting
+- Reduced blacklist log spam using timed log suppression
