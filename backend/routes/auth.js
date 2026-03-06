@@ -1,9 +1,3 @@
-// ============================================
-// Auth Routes — /auth/*
-// ============================================
-// Public endpoints for access requests and login.
-// ============================================
-
 import { Router } from 'express';
 import { supabase } from '../db.js';
 import { encryptRequestPassword } from '../utils/requestPasswordCipher.js';

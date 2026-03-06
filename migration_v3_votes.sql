@@ -1,8 +1,5 @@
--- ============================================
--- Migration v3: One Vote Per User Per Link
--- ============================================
--- Run this in Supabase SQL Editor
--- ============================================
+-- Migration: One Vote Per User Per Link
+
 
 CREATE TABLE IF NOT EXISTS resource_votes (
   id          UUID DEFAULT gen_random_uuid() PRIMARY KEY,

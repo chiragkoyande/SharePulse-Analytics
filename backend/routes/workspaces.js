@@ -1,10 +1,3 @@
-// ============================================
-// Workspace Routes — /workspaces/*
-// ============================================
-// CRUD for workspaces, member management,
-// and WhatsApp group connections.
-// ============================================
-
 import { Router } from 'express';
 import { supabase } from '../db.js';
 import { requireAuth, requireSuperAdmin, requireWorkspaceAccess } from '../middleware/authMiddleware.js';

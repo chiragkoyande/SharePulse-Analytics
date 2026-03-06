@@ -1,10 +1,5 @@
--- ============================================
--- Migration v4: Access Requests with User Password
--- ============================================
--- Users provide password during request-access flow.
--- Password is stored encrypted in access_requests.encrypted_password.
--- Admin UI only reads email/status/date.
--- ============================================
+-- Migration: Access Requests with User Password
+
 
 ALTER TABLE access_requests
   ADD COLUMN IF NOT EXISTS encrypted_password TEXT;

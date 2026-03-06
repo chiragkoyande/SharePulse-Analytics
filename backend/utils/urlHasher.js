@@ -1,10 +1,3 @@
-// ============================================
-// URL Normalizer & Hasher
-// ============================================
-// Normalizes URLs for consistent deduplication
-// and generates MD5 hashes for fast lookups.
-// ============================================
-
 import { createHash } from 'crypto';
 
 /**

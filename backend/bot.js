@@ -1,12 +1,3 @@
-// ============================================
-// WhatsApp Bot Module (v4 — Workspace-Aware)
-// ============================================
-// Monitors WhatsApp groups configured in DB
-// per workspace. Assigns workspace_id on save.
-//
-// DATA MINIMIZATION: No PII stored.
-// ============================================
-
 import pkg from 'whatsapp-web.js';
 const { Client, LocalAuth } = pkg;
 import qrcode from 'qrcode-terminal';
@@ -548,12 +539,6 @@ export function requestGroupHistoryScan(whatsappGroupId) {
 }
 
 export function startBot() {
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('🤖 SharePulse Analytics Bot (v4 — Workspace)');
-    console.log(`   Headless: ${HEADLESS}`);
-    console.log(`   Privacy:  PII-free ingestion`);
-    console.log(`   Groups:   loaded from DB at startup`);
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
     const client = new Client({
         authStrategy: new LocalAuth({ clientId: WWEBJS_CLIENT_ID, dataPath: WWEBJS_DATA_PATH }),

@@ -1,10 +1,3 @@
-// ============================================
-// Admin Routes — /admin/*
-// ============================================
-// Admin-only endpoints for managing users
-// and access requests.
-// ============================================
-
 import { Router } from 'express';
 import { supabase } from '../db.js';
 import { requireAuth } from '../middleware/authMiddleware.js';

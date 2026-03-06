@@ -1,9 +1,3 @@
-// ============================================
-// Express Routes — Resources, Voting, Export
-// ============================================
-// All data queries scoped by workspace_id.
-// ============================================
-
 import { Router } from 'express';
 import { supabase } from '../db.js';
 import { requireAuth } from '../middleware/authMiddleware.js';

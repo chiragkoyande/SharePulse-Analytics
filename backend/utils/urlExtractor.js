@@ -1,10 +1,3 @@
-// ============================================
-// URL Extractor Utility
-// ============================================
-// Robust URL extraction and validation from
-// raw WhatsApp message text.
-// ============================================
-
 /**
  * Regex to match explicit protocol URLs.
  */

@@ -1,7 +1,3 @@
-// ============================================
-// Server Entry Point
-// ============================================
-
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
@@ -40,7 +36,7 @@ const ownershipMarker = {
     buildDate: process.env.BUILD_DATE || new Date().toISOString(),
 };
 
-// ── Middleware ────────────────────────────────
+// Middleware
 
 app.use(cors());
 app.use(express.json());
@@ -50,7 +46,7 @@ app.use((req, _res, next) => {
     next();
 });
 
-// ── Routes ───────────────────────────────────
+// Routes
 
 app.get('/health', (_req, res) => {
     res.json({
@@ -72,14 +68,14 @@ app.use('/', workspaceRoutes);
 app.use('/admin', adminRoutes);
 app.use('/', resourceRoutes);
 
-// ── Error Handler ────────────────────────────
+// Error Handler
 
 app.use((err, _req, res, _next) => {
     console.error('❌ API Error:', err.message);
     res.status(err.status || 500).json({ success: false, error: err.message });
 });
 
-// ── Seed First Admin ─────────────────────────
+// Seed First Admin
 
 async function seedAdmin() {
     if (!ADMIN_EMAIL) {
@@ -134,7 +130,7 @@ async function seedAdmin() {
     }
 }
 
-// ── Startup ──────────────────────────────────
+// Startup
 
 async function start() {
     const required = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];

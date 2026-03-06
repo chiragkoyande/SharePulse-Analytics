@@ -1,6 +1,5 @@
--- ============================================
--- Migration v5: User-saved Resources
--- ============================================
+-- Migration: User-saved Resources
+
 
 CREATE TABLE IF NOT EXISTS resource_saves (
   id          UUID DEFAULT gen_random_uuid() PRIMARY KEY,

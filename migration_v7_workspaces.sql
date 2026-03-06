@@ -1,10 +1,5 @@
--- ============================================
--- Migration v7: Workspace Multi-Tenancy
--- ============================================
--- Run this in Supabase SQL Editor AFTER v6.
--- Creates workspaces, workspace_members,
--- workspace_groups and migrates resources.
--- ============================================
+-- Migration: Workspaces
+
 
 -- Step 1: Create workspaces table
 CREATE TABLE IF NOT EXISTS workspaces (

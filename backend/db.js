@@ -1,10 +1,3 @@
-// ============================================
-// Supabase Client
-// ============================================
-// Shared Supabase client for backend use.
-// Uses the SERVICE_ROLE_KEY for full access.
-// ============================================
-
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.SUPABASE_URL;

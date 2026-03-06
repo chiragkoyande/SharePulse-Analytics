@@ -1,9 +1,5 @@
--- ============================================
--- Migration v6: Multi-Group Workspace Support
--- ============================================
--- Run this in Supabase SQL Editor
--- (Dashboard → SQL Editor → New Query)
--- ============================================
+-- Migration: Multi-Group Workspace Support
+
 
 -- Step 1: Create groups table
 CREATE TABLE IF NOT EXISTS groups (

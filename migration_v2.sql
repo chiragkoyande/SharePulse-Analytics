@@ -1,9 +1,5 @@
--- ============================================
--- Migration v2: Security & Ranking Features
--- ============================================
--- Run this in Supabase SQL Editor
--- (Dashboard → SQL Editor → New Query)
--- ============================================
+-- Migration: Security & Ranking Features
+
 
 -- Step 1: Add new columns (safe — won't fail if rows exist)
 ALTER TABLE resources ADD COLUMN IF NOT EXISTS url_hash TEXT;

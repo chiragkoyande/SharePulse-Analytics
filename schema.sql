@@ -1,10 +1,5 @@
--- ============================================
--- WhatsApp Resource Intelligence Platform
--- Supabase SQL Schema (v2 — Privacy-First)
--- ============================================
--- Run this in Supabase SQL Editor
--- (Dashboard → SQL Editor → New Query)
--- ============================================
+-- Database Schema
+
 
 CREATE TABLE IF NOT EXISTS resources (
   id          UUID DEFAULT gen_random_uuid() PRIMARY KEY,

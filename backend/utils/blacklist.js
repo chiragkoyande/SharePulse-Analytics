@@ -1,8 +1,5 @@
-// ============================================
 // Domain Blacklist Filter
-// ============================================
-// Prevents storing links from unwanted domains.
-// ============================================
+
 
 /**
  * Domains to ignore. Any URL whose hostname

@@ -1,10 +1,3 @@
-// ============================================
-// Auth Middleware (v2 — Workspace-Aware)
-// ============================================
-// Verifies Supabase JWT tokens, checks user
-// roles, and enforces workspace access.
-// ============================================
-
 import { supabase } from '../db.js';
 
 /**

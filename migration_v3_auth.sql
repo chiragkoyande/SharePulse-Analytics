@@ -1,8 +1,5 @@
--- ============================================
--- Migration v3: Authentication System
--- ============================================
--- Run this in Supabase SQL Editor
--- ============================================
+-- Migration: Authentication System
+
 
 -- User roles and status tracking
 CREATE TABLE IF NOT EXISTS app_users (

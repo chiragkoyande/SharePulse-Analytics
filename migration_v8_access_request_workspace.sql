@@ -1,6 +1,5 @@
--- ============================================
--- Migration v8: Access Request Workspace Binding
--- ============================================
+-- Migration: Access Request Workspace Binding
+
 
 ALTER TABLE access_requests
   ADD COLUMN IF NOT EXISTS workspace_id UUID;
