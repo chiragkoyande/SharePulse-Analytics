@@ -328,6 +328,12 @@ curl -X POST http://localhost:3001/admin/rescan-history \\
 - `⛔ Blacklisted URL skipped` -> URL matches blocked domain list
 - `⚠️ Could not find group` -> bot account cannot access that group id
 
+## Observability Tips
+
+- Keep `DEBUG_GROUP_MATCH=false` in normal operation to reduce noisy logs.
+- Temporarily set `DEBUG_GROUP_MATCH=true` when debugging mapping/dedupe issues.
+- Use `/health` for uptime checks and `/version` for deployment traceability.
+
 ## Troubleshooting
 
 ### `EADDRINUSE: address already in use :::3001`
