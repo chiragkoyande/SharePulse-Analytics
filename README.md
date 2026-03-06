@@ -174,6 +174,17 @@ APP_REPO_URL="https://github.com/chiragkoyande/SharePulse-Analytics"
 # BUILD_DATE=2026-03-06T11:30:00.000Z
 ```
 
+### Backend Env Quick Reference
+
+| Variable | Purpose |
+|---|---|
+| `SUPABASE_URL` | Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server-side DB/Auth admin access |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Initial super admin bootstrap |
+| `ACCESS_REQUEST_SECRET` | Encrypt request-time password before approval |
+| `PROCESS_SELF_MESSAGES` | Capture links sent by your own WhatsApp account |
+| `DEBUG_GROUP_MATCH` | Extra bot logs for group matching and skip reasons |
+
 ### 4) Frontend Environment (`frontend/.env`)
 
 ```env
