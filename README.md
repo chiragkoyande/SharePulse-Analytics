@@ -193,6 +193,14 @@ VITE_SUPABASE_ANON_KEY=your_anon_key
 VITE_API_URL=http://localhost:3001
 ```
 
+### Frontend Env Quick Reference
+
+| Variable | Purpose |
+|---|---|
+| `VITE_SUPABASE_URL` | Browser-side Supabase URL |
+| `VITE_SUPABASE_ANON_KEY` | Public Supabase anon key |
+| `VITE_API_URL` | Backend API base URL |
+
 ### 5) Install + Run
 
 ```bash
