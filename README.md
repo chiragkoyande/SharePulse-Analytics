@@ -1,9 +1,36 @@
 # SharePulse Analytics
 
+![Repo Stars](https://img.shields.io/github/stars/chiragkoyande/SharePulse-Analytics?style=for-the-badge)
+![Last Commit](https://img.shields.io/github/last-commit/chiragkoyande/SharePulse-Analytics?style=for-the-badge)
+![Issues](https://img.shields.io/github/issues/chiragkoyande/SharePulse-Analytics?style=for-the-badge)
+![License](https://img.shields.io/badge/license-ISC-blue?style=for-the-badge)
+
 SharePulse Analytics is a full-stack SaaS-style dashboard that monitors a WhatsApp group, extracts shared links, deduplicates and scores them, and gives admins a secure access workflow for team members.
+
+## Why This Project
+- Built for communities that share too many links and lose valuable resources in chat history.
+- Turns noisy messages into a searchable, ranked, and saved knowledge feed.
+- Includes admin approval workflow, user voting, and ownership marker endpoints for production-like operation.
 
 Owner: [Chirag Koyande](https://github.com/chiragkoyande)  
 Repository: <https://github.com/chiragkoyande/SharePulse-Analytics>
+
+## Quick Start (Fastest Path)
+```bash
+git clone https://github.com/chiragkoyande/SharePulse-Analytics.git
+cd SharePulse-Analytics
+# then follow setup sections below for backend + frontend env and run
+```
+
+## Highlights
+| Capability | What You Get |
+|---|---|
+| WhatsApp Ingestion | Real-time + startup history scan from one target group |
+| Link Intelligence | URL hashing, dedup, title extraction, domain analytics |
+| Team Workflow | Access requests, approve/reject, role promotion, revoke |
+| Engagement Signals | Like/dislike voting and top-domain trend visibility |
+| Personal Workflow | Save/unsave links + CSV export |
+| Ownership Proof | `/version` and `/health` include runtime ownership marker |
 
 ## What It Does
 - Monitors one target WhatsApp group in near real time.
@@ -28,6 +55,12 @@ WhatsApp Group
    -> Express API (auth/admin/resources/version)
    -> React Dashboard
 ```
+
+## Product Snapshot
+- Branded dashboard shell with quick admin actions.
+- Top domains and popular links insights blocks.
+- Searchable resource feed with vote/save actions.
+- Request-access login flow for controlled onboarding.
 
 ## Repository Structure
 ```text
@@ -146,10 +179,7 @@ Open `http://localhost:5173`.
 1. User submits request from login page (`/auth/request-access`).
 2. Admin reviews pending requests in Admin panel.
 3. Admin approves (`/admin/approve`) or rejects.
-4. On approval:
-- Supabase auth account is created/updated.
-- `app_users` role/status is activated.
-- Approval email is sent via SMTP if configured.
+4. On approval, Supabase auth account is created/updated, `app_users` status is activated, and an email is sent if SMTP is configured.
 5. User signs in using requested email/password.
 
 ## API Reference
@@ -222,6 +252,17 @@ Check:
 - `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` in `backend/.env`
 - Gmail account has 2FA enabled
 - `SMTP_PASS` is a Google app password (not normal Gmail password)
+
+## Roadmap
+- Multi-workspace support (separate groups per tenant).
+- Better anti-phishing scoring and trust labels.
+- Weekly digest emails with top resources.
+- Domain watchlists and alerts.
+
+## Support This Repo
+- Star the repo to increase discovery.
+- Open issues with reproducible logs and screenshots.
+- Contribute focused PRs (one feature/fix per PR).
 
 ## Security and Privacy Notes
 - Backend uses Supabase service role key; never expose it to frontend.
