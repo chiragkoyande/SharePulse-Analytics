@@ -276,6 +276,12 @@ Base URL: `http://localhost:3001`
 4. Wait for queue log (`history_scan` queued) or run `POST /admin/rescan-history`.
 5. Confirm terminal shows monitored group and scan output.
 
+### Group ID Format Tips
+
+- Recommended format: `120363XXXXXXXXXXXX@g.us`
+- If you paste only numeric part, backend normalizes to `@g.us`
+- Group must be visible in the same WhatsApp account session used by the bot
+
 ## Dedup and Share Behavior
 
 - Link hashing is URL-normalization based.
