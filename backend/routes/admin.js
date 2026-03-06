@@ -36,6 +36,34 @@ function hasWorkspaceAdminAccess(req, workspaceId) {
     return getAdminWorkspaceIds(req).includes(workspaceId);
 }
 
+async function listWorkspaceUsers(workspaceId) {
+    const { data: members, error: memErr } = await supabase
+        .from('workspace_members')
+        .select('id, user_email, role')
+        .eq('workspace_id', workspaceId)
+        .order('joined_at', { ascending: true });
+    if (memErr) throw memErr;
+
+    const emails = [...new Set((members || []).map((m) => m.user_email))];
+    let users = [];
+    if (emails.length > 0) {
+        const { data: appUsers, error: appErr } = await supabase
+            .from('app_users')
+            .select('email, status')
+            .in('email', emails);
+        if (appErr) throw appErr;
+        users = appUsers || [];
+    }
+    const statusByEmail = new Map(users.map((u) => [u.email, u.status]));
+
+    return (members || []).map((m) => ({
+        id: m.id,
+        email: m.user_email,
+        role: m.role,
+        status: statusByEmail.get(m.user_email) || 'active',
+    }));
+}
+
 // Admin routes require auth + either super admin/global admin
 // or workspace-level admin/owner membership.
 router.use(requireAuth, (req, res, next) => {
@@ -263,40 +291,17 @@ router.post('/reject', async (req, res, next) => {
 
 router.get('/users', async (req, res, next) => {
     try {
-        if (!req.user?.isSuperAdmin) {
-            const workspaceId = req.query.workspace_id;
-            if (!workspaceId || !hasWorkspaceAdminAccess(req, workspaceId)) {
+        const workspaceId = req.query.workspace_id;
+        if (workspaceId) {
+            if (!hasWorkspaceAdminAccess(req, workspaceId)) {
                 return res.json({ success: true, data: [] });
             }
+            const data = await listWorkspaceUsers(workspaceId);
+            return res.json({ success: true, data });
+        }
 
-            const { data: members, error: memErr } = await supabase
-                .from('workspace_members')
-                .select('id, user_email, role')
-                .eq('workspace_id', workspaceId)
-                .order('joined_at', { ascending: true });
-            if (memErr) throw memErr;
-
-            const emails = [...new Set((members || []).map((m) => m.user_email))];
-            let users = [];
-            if (emails.length > 0) {
-                const { data: appUsers, error: appErr } = await supabase
-                    .from('app_users')
-                    .select('email, status')
-                    .in('email', emails);
-                if (appErr) throw appErr;
-                users = appUsers || [];
-            }
-            const statusByEmail = new Map(users.map((u) => [u.email, u.status]));
-
-            return res.json({
-                success: true,
-                data: (members || []).map((m) => ({
-                    id: m.id,
-                    email: m.user_email,
-                    role: m.role,
-                    status: statusByEmail.get(m.user_email) || 'active',
-                })),
-            });
+        if (!req.user?.isSuperAdmin) {
+            return res.json({ success: true, data: [] });
         }
 
         const { data, error } = await supabase
@@ -370,14 +375,37 @@ router.post('/revoke', async (req, res, next) => {
             return res.status(400).json({ success: false, error: 'Cannot revoke your own access' });
         }
 
-        const { error } = await supabase
+        const { data: deletedRows, error } = await supabase
             .from('workspace_members')
             .delete()
             .eq('workspace_id', workspace_id)
-            .eq('user_email', normalizedEmail);
+            .eq('user_email', normalizedEmail)
+            .select('id');
         if (error) throw error;
 
-        res.json({ success: true, message: `Workspace access revoked: ${normalizedEmail}` });
+        if (!deletedRows || deletedRows.length === 0) {
+            return res.status(404).json({ success: false, error: 'User is not a member of this workspace' });
+        }
+
+        const { count: remainingMemberships, error: countErr } = await supabase
+            .from('workspace_members')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_email', normalizedEmail);
+        if (countErr) throw countErr;
+
+        if ((remainingMemberships || 0) === 0) {
+            const { error: statusErr } = await supabase
+                .from('app_users')
+                .update({ status: 'revoked' })
+                .eq('email', normalizedEmail);
+            if (statusErr) throw statusErr;
+        }
+
+        res.json({
+            success: true,
+            message: `Workspace access revoked: ${normalizedEmail}`,
+            workspace_memberships_remaining: remainingMemberships || 0,
+        });
     } catch (error) {
         next(error);
     }
