@@ -56,3 +56,19 @@ export function hashUrl(url) {
     const normalized = normalizeUrl(url);
     return createHash('md5').update(normalized).digest('hex');
 }
+
+/**
+ * Generate workspace-aware hash:
+ * - Unmapped links keep legacy global hash
+ * - Workspace links hash as "<normalized>::ws:<workspaceId>"
+ * This preserves old data while allowing the same URL in multiple workspaces.
+ *
+ * @param {string} url
+ * @param {string|null} workspaceId
+ * @returns {string}
+ */
+export function hashUrlForWorkspace(url, workspaceId = null) {
+    const normalized = normalizeUrl(url);
+    if (!workspaceId) return createHash('md5').update(normalized).digest('hex');
+    return createHash('md5').update(`${normalized}::ws:${workspaceId}`).digest('hex');
+}
