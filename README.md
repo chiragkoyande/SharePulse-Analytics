@@ -11,6 +11,15 @@ SharePulse Analytics is a workspace-aware SaaS dashboard that monitors WhatsApp 
 - Owner: [Chirag Koyande](https://github.com/chiragkoyande)
 - Repository: <https://github.com/chiragkoyande/SharePulse-Analytics>
 
+## Table of Contents
+
+- [What This Solves](#what-this-solves)
+- [Core Capabilities](#core-capabilities)
+- [Tech Stack](#tech-stack)
+- [Setup](#setup)
+- [API Overview](#api-overview)
+- [Troubleshooting](#troubleshooting)
+
 ## What This Solves
 
 Communities share important links in chat, but those links are hard to find later. SharePulse Analytics turns chat noise into a searchable, ranked knowledge feed with admin control.
