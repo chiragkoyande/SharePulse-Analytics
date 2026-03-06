@@ -198,6 +198,13 @@ npm run dev
 
 Open: <http://localhost:5173>
 
+## Deployment Notes
+
+- Backend can run on Render/Railway/Fly with persistent env vars.
+- Frontend can run on Vercel/Netlify with `VITE_API_URL` set to backend URL.
+- Keep WhatsApp auth state directory (`.wwebjs_auth`) persistent when possible.
+- In production, use process manager or platform auto-restart for backend service.
+
 ## API Overview
 
 Base URL: `http://localhost:3001`
