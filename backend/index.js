@@ -10,6 +10,7 @@ import { testConnection, supabase } from './db.js';
 import resourceRoutes from './routes/resources.js';
 import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/admin.js';
+import workspaceRoutes from './routes/workspaces.js';
 import { startBot } from './bot.js';
 
 const app = express();
@@ -67,6 +68,7 @@ app.get('/version', (_req, res) => {
 });
 
 app.use('/', authRoutes);
+app.use('/', workspaceRoutes);
 app.use('/admin', adminRoutes);
 app.use('/', resourceRoutes);
 
@@ -86,10 +88,10 @@ async function seedAdmin() {
     }
 
     const email = ADMIN_EMAIL.toLowerCase().trim();
-    // Ensure admin exists in app_users
+    // Ensure admin exists in app_users as super_admin
     const { error: appErr } = await supabase
         .from('app_users')
-        .upsert({ email, role: 'admin', status: 'active' }, { onConflict: 'email' });
+        .upsert({ email, role: 'super_admin', status: 'active' }, { onConflict: 'email' });
     if (appErr) {
         console.error(`❌ Could not upsert admin in app_users: ${appErr.message}`);
         return;
@@ -135,7 +137,8 @@ async function seedAdmin() {
 // ── Startup ──────────────────────────────────
 
 async function start() {
-    const required = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'TARGET_GROUP_ID'];
+    const required = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
+    // TARGET_GROUP_IDS no longer required — bot reads from workspace_groups DB table
     const missing = required.filter((k) => !process.env[k]);
 
     if (missing.length > 0) {
@@ -165,7 +168,10 @@ async function start() {
         console.log('   GET  /admin/requests');
         console.log('   POST /admin/approve');
         console.log('   GET  /admin/users');
-        console.log('   GET  /resources');
+        console.log('   GET  /workspaces');
+        console.log('   GET  /workspaces/:id/members');
+        console.log('   GET  /workspaces/:id/groups');
+        console.log('   GET  /resources?workspace_id=');
         console.log('   POST /vote');
         console.log('   GET  /saved-links');
         console.log('   POST /save-link');

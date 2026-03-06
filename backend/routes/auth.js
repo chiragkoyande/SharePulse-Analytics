@@ -10,11 +10,15 @@ import { encryptRequestPassword } from '../utils/requestPasswordCipher.js';
 
 const router = Router();
 
+function isMissingWorkspaceColumnError(error) {
+    return String(error?.message || '').includes('access_requests.workspace_id');
+}
+
 // ── POST /auth/request-access ────────────────
 
 router.post('/auth/request-access', async (req, res, next) => {
     try {
-        const { email, password } = req.body;
+        const { email, password, workspace_id } = req.body;
 
         if (!email || !email.includes('@')) {
             return res.status(400).json({ success: false, error: 'Valid email is required' });
@@ -22,9 +26,20 @@ router.post('/auth/request-access', async (req, res, next) => {
         if (!password || String(password).length < 8) {
             return res.status(400).json({ success: false, error: 'Password must be at least 8 characters' });
         }
-
         const normalizedEmail = email.toLowerCase().trim();
         const encryptedPassword = encryptRequestPassword(password);
+
+        if (workspace_id) {
+            const { data: workspace, error: wsErr } = await supabase
+                .from('workspaces')
+                .select('id')
+                .eq('id', workspace_id)
+                .maybeSingle();
+            if (wsErr) throw wsErr;
+            if (!workspace) {
+                return res.status(400).json({ success: false, error: 'Selected workspace not found' });
+            }
+        }
 
         // Check if already an active user
         const { data: existingUser } = await supabase
@@ -54,11 +69,19 @@ router.post('/auth/request-access', async (req, res, next) => {
                 .update({
                     status: 'pending',
                     encrypted_password: encryptedPassword,
+                    workspace_id,
                     created_at: new Date().toISOString(),
                 })
                 .eq('id', existingReq.id);
-
-            if (updateReqErr) throw updateReqErr;
+            if (updateReqErr) {
+                if (isMissingWorkspaceColumnError(updateReqErr)) {
+                    return res.status(500).json({
+                        success: false,
+                        error: 'Database migration required: run migration_v8_access_request_workspace.sql',
+                    });
+                }
+                throw updateReqErr;
+            }
             return res.json({ success: true, message: 'Access request resubmitted' });
         }
 
@@ -69,9 +92,16 @@ router.post('/auth/request-access', async (req, res, next) => {
                 email: normalizedEmail,
                 status: 'pending',
                 encrypted_password: encryptedPassword,
+                workspace_id,
             });
 
         if (error) {
+            if (isMissingWorkspaceColumnError(error)) {
+                return res.status(500).json({
+                    success: false,
+                    error: 'Database migration required: run migration_v8_access_request_workspace.sql',
+                });
+            }
             // Race-safe fallback when another request was created in parallel
             if (error.code === '23505' || String(error.message || '').includes('access_requests_email_key')) {
                 const { error: retryErr } = await supabase
@@ -79,10 +109,19 @@ router.post('/auth/request-access', async (req, res, next) => {
                     .update({
                         status: 'pending',
                         encrypted_password: encryptedPassword,
+                        workspace_id,
                         created_at: new Date().toISOString(),
                     })
                     .eq('email', normalizedEmail);
-                if (retryErr) throw retryErr;
+                if (retryErr) {
+                    if (isMissingWorkspaceColumnError(retryErr)) {
+                        return res.status(500).json({
+                            success: false,
+                            error: 'Database migration required: run migration_v8_access_request_workspace.sql',
+                        });
+                    }
+                    throw retryErr;
+                }
                 return res.json({ success: true, message: 'Access request resubmitted' });
             }
             throw error;
