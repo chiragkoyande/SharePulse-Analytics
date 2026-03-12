@@ -3,11 +3,12 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-const usesNgrokApi = /ngrok-free\.(app|dev)/.test(apiBase);
+const usesTunnelApi = /ngrok-free\.(app|dev)|\.(trycloudflare|cloudflare-tunnel)\.com/.test(apiBase);
 
 function backendFetch(url, options = {}) {
-    if (!usesNgrokApi) return fetch(url, options);
+    if (!usesTunnelApi) return fetch(url, options);
     const headers = new Headers(options.headers || {});
+    // Add headers for both ngrok and Cloudflare tunnel
     headers.set('ngrok-skip-browser-warning', 'true');
     return fetch(url, { ...options, headers });
 }

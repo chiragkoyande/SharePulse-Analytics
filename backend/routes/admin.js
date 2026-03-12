@@ -466,5 +466,40 @@ router.post('/rescan-history', async (req, res, next) => {
         next(error);
     }
 });
+// ── POST /admin/refetch-titles ──────────────
+// Re-fetch page titles for resources that still have 'New Resource' as the title.
+router.post('/refetch-titles', async (req, res, next) => {
+    try {
+        const { fetchPageTitle: fetchTitle } = await import('../bot.js');
+        const limit = Math.min(Number(req.query.limit) || 50, 200);
+
+        const { data: resources, error } = await supabase
+            .from('resources')
+            .select('id, url, title')
+            .eq('title', 'New Resource')
+            .limit(limit);
+
+        if (error) throw error;
+        if (!resources || resources.length === 0) {
+            return res.json({ success: true, updated: 0, message: 'No resources with missing titles found' });
+        }
+
+        let updated = 0;
+        for (const r of resources) {
+            const newTitle = await fetchTitle(r.url);
+            if (newTitle && newTitle !== 'New Resource') {
+                const { error: updateErr } = await supabase
+                    .from('resources')
+                    .update({ title: newTitle })
+                    .eq('id', r.id);
+                if (!updateErr) updated++;
+            }
+        }
+
+        res.json({ success: true, scanned: resources.length, updated, message: `Updated ${updated} resource title(s)` });
+    } catch (error) {
+        next(error);
+    }
+});
 
 export default router;

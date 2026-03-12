@@ -2,10 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-const USES_NGROK_API = /ngrok-free\.(app|dev)/.test(API_BASE);
+const USES_TUNNEL_API = /ngrok-free\.(app|dev)|\.(trycloudflare|cloudflare-tunnel)\.com/.test(API_BASE);
 
 function backendFetch(url, options = {}) {
-    if (!USES_NGROK_API) return fetch(url, options);
+    if (!USES_TUNNEL_API) return fetch(url, options);
     const headers = new Headers(options.headers || {});
     headers.set('ngrok-skip-browser-warning', 'true');
     return fetch(url, { ...options, headers });
@@ -425,10 +425,10 @@ export default function AdminPanel({ onClose }) {
                             )}
                         </section>
 
-                        {isSuperAdmin && (
+                        {(isSuperAdmin || selectedWorkspace?.my_role === 'owner') && (
                             <section className="admin-step">
-                                <h3>Step 2: Create or Edit Workspace</h3>
-                                <p>Create workspace first, then select it above.</p>
+                                <h3>Step 2: {isSuperAdmin && !editWsId ? 'Create or Edit Workspace' : 'Edit Workspace'}</h3>
+                                <p>{isSuperAdmin && !editWsId ? 'Create workspace first, then select it above.' : 'Update the details for the selected workspace.'}</p>
                                 <form className="group-form" onSubmit={handleWsSubmit}>
                                     <div className="group-form__row">
                                         <input type="text" placeholder="Workspace Name *" value={wsForm.name}
@@ -454,7 +454,9 @@ export default function AdminPanel({ onClose }) {
                                         </div>
                                     </div>
                                     <div className="group-form__actions">
-                                        <button type="submit" className="admin-btn admin-btn--approve">{editWsId ? 'Update Workspace' : 'Create Workspace'}</button>
+                                        <button type="submit" className="admin-btn admin-btn--approve">
+                                            {editWsId ? 'Update Workspace' : 'Create Workspace'}
+                                        </button>
                                         {editWsId && (
                                             <button type="button" className="admin-btn admin-btn--reject" onClick={() => {
                                                 setEditWsId(null);
@@ -464,32 +466,36 @@ export default function AdminPanel({ onClose }) {
                                     </div>
                                 </form>
 
-                                {workspaces.length === 0 ? <p className="admin-empty">No workspaces</p> : (
-                                    workspaces.map((ws) => (
-                                        <div key={ws.id} className="admin-item">
-                                            <div className="admin-item__info">
-                                                <div className="group-item__name-row">
-                                                    <span className="group-tab__dot" style={{ backgroundColor: ws.color || '#0ea5e9' }} />
-                                                    <span className="admin-item__email">{ws.name}</span>
+                                {isSuperAdmin && (
+                                    <>
+                                        {workspaces.length === 0 ? <p className="admin-empty">No workspaces</p> : (
+                                            workspaces.map((ws) => (
+                                                <div key={ws.id} className="admin-item">
+                                                    <div className="admin-item__info">
+                                                        <div className="group-item__name-row">
+                                                            <span className="group-tab__dot" style={{ backgroundColor: ws.color || '#0ea5e9' }} />
+                                                            <span className="admin-item__email">{ws.name}</span>
+                                                        </div>
+                                                        <span className="admin-item__date">{ws.slug} {ws.description ? `· ${ws.description}` : ''}</span>
+                                                    </div>
+                                                    <div className="admin-item__actions">
+                                                        <button className="admin-btn" onClick={() => handleSelectWorkspace(ws.id)}>Select</button>
+                                                        <button className="admin-btn admin-btn--promote" onClick={() => {
+                                                            setEditWsId(ws.id);
+                                                            setWsForm({
+                                                                name: ws.name,
+                                                                slug: ws.slug,
+                                                                description: ws.description || '',
+                                                                color: ws.color || '#0ea5e9',
+                                                                owner_email: '',
+                                                            });
+                                                        }}>Edit</button>
+                                                        <button className="admin-btn admin-btn--revoke" onClick={() => handleWsDelete(ws.id)}>Delete</button>
+                                                    </div>
                                                 </div>
-                                                <span className="admin-item__date">{ws.slug} {ws.description ? `· ${ws.description}` : ''}</span>
-                                            </div>
-                                            <div className="admin-item__actions">
-                                                <button className="admin-btn" onClick={() => handleSelectWorkspace(ws.id)}>Select</button>
-                                                <button className="admin-btn admin-btn--promote" onClick={() => {
-                                                    setEditWsId(ws.id);
-                                                    setWsForm({
-                                                        name: ws.name,
-                                                        slug: ws.slug,
-                                                        description: ws.description || '',
-                                                        color: ws.color || '#0ea5e9',
-                                                        owner_email: '',
-                                                    });
-                                                }}>Edit</button>
-                                                <button className="admin-btn admin-btn--revoke" onClick={() => handleWsDelete(ws.id)}>Delete</button>
-                                            </div>
-                                        </div>
-                                    ))
+                                            ))
+                                        )}
+                                    </>
                                 )}
                             </section>
                         )}

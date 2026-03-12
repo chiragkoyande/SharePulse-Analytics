@@ -40,7 +40,7 @@ export default function ResourceTable({ resources, loading, onVote, onSave, canD
                 <tbody>
                     {resources.map((r, i) => (
                         <tr key={r.id} className="resource-table__row" style={{ '--row-index': i }}>
-                            <td className="resource-table__title">{r.title || 'New Resource'}</td>
+                            <td className="resource-table__title">{r.title && r.title !== 'New Resource' ? r.title : (r.domain || 'Untitled')}</td>
                             <td className="resource-table__url">
                                 <a href={r.url} target="_blank" rel="noopener noreferrer">
                                     {displayUrl(r.url, 40)}
@@ -70,7 +70,7 @@ export default function ResourceTable({ resources, loading, onVote, onSave, canD
                 {resources.map((r) => (
                     <div key={r.id} className="resource-card">
                         <div className="resource-card__header">
-                            <h4>{r.title || 'New Resource'}</h4>
+                            <h4>{r.title && r.title !== 'New Resource' ? r.title : (r.domain || 'Untitled')}</h4>
                         </div>
                         <a className="resource-card__url" href={r.url} target="_blank" rel="noopener noreferrer">
                             {displayUrl(r.url, 50)}

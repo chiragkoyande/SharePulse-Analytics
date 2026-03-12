@@ -7,14 +7,14 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 const AuthContext = createContext(null);
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-const USES_NGROK_API = /ngrok-free\.(app|dev)/.test(API_BASE);
+const USES_TUNNEL_API = /ngrok-free\.(app|dev)|\.(trycloudflare|cloudflare-tunnel)\.com/.test(API_BASE);
 
 function backendFetch(url, options = {}) {
     const controller = new AbortController();
     const timeoutMs = Number(import.meta.env.VITE_API_TIMEOUT_MS || 15000);
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     const doFetch = () => {
-        if (!USES_NGROK_API) {
+        if (!USES_TUNNEL_API) {
             return fetch(url, { ...options, signal: controller.signal });
         }
         const headers = new Headers(options.headers || {});
@@ -28,7 +28,7 @@ function backendFetch(url, options = {}) {
                 throw new Error('Request timed out. Backend/tunnel may be offline.');
             }
             if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Load failed')) {
-                throw new Error('Cannot reach backend API. Check ngrok URL and local backend.');
+                throw new Error('Cannot reach backend API. Check tunnel URL and local backend.');
             }
             throw err;
         })

@@ -369,7 +369,7 @@ export default function App() {
                                         <span className="popular-links__rank">#{i + 1}</span>
                                         <div className="popular-links__info">
                                             <a href={r.url} target="_blank" rel="noopener noreferrer">
-                                                {r.title || 'New Resource'}
+                                                {r.title && r.title !== 'New Resource' ? r.title : (r.domain || 'Untitled')}
                                             </a>
                                             <span className="popular-links__domain">{r.domain}</span>
                                         </div>

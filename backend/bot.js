@@ -215,18 +215,52 @@ function getPuppeteerOptions() {
 async function fetchPageTitle(url) {
     try {
         const controller = new AbortController();
-        const t = setTimeout(() => controller.abort(), TITLE_FETCH_TIMEOUT_MS);
+        const t = setTimeout(() => controller.abort(), 5000);
         const response = await fetch(url, {
             signal: controller.signal,
             headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SharePulse/1.0)' },
+            redirect: 'follow',
         });
         clearTimeout(t);
-        const html = await response.text();
-        const match = html.match(/<title[^>]*>([^<]*)<\/title>/i);
-        if (match && match[1]) return match[1].trim() || 'New Resource';
-        return 'New Resource';
+        // Read only the first 16KB to avoid downloading entire pages
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let html = '';
+        while (html.length < 16384) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            html += decoder.decode(value, { stream: true });
+        }
+        try { reader.cancel(); } catch { /* ignore */ }
+
+        // Try <title> tag (handles multiline and entities)
+        const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+        if (titleMatch && titleMatch[1]) {
+            const title = titleMatch[1].replace(/\s+/g, ' ').trim();
+            if (title) return title;
+        }
+
+        // Fallback: og:title meta tag
+        const ogMatch = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)
+            || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i);
+        if (ogMatch && ogMatch[1]) {
+            const ogTitle = ogMatch[1].trim();
+            if (ogTitle) return ogTitle;
+        }
+
+        // Last resort: use the hostname from the URL
+        return fallbackTitle(url);
     } catch {
-        return 'New Resource';
+        return fallbackTitle(url);
+    }
+}
+
+function fallbackTitle(url) {
+    try {
+        const hostname = new URL(url).hostname.replace(/^www\./, '');
+        return hostname;
+    } catch {
+        return url;
     }
 }
 
@@ -319,7 +353,7 @@ async function saveResourceToDB({ url, urlHash, title, domain, workspaceId }) {
         const insertData = {
             url,
             url_hash: urlHash,
-            title: title || 'New Resource',
+            title: title || fallbackTitle(url),
             domain: domain || 'unknown',
         };
         if (workspaceId) insertData.workspace_id = workspaceId;
@@ -629,5 +663,6 @@ export function startBot() {
     return client;
 }
 
+export { fetchPageTitle };
 export async function generateSummary() { return null; }
 export async function detectPhishing() { return false; }
