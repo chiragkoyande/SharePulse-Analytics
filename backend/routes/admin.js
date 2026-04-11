@@ -149,21 +149,19 @@ router.post('/approve', async (req, res, next) => {
         }
 
         const targetWorkspaceId = workspace_id || requestRow.workspace_id || null;
-        if (!targetWorkspaceId) {
-            return res.status(400).json({ success: false, error: 'workspace_id is required to approve this request' });
-        }
-        if (!hasWorkspaceAdminAccess(req, targetWorkspaceId)) {
-            return res.status(403).json({ success: false, error: 'No admin access for selected workspace' });
-        }
-
-        const { data: workspace, error: wsErr } = await supabase
-            .from('workspaces')
-            .select('id')
-            .eq('id', targetWorkspaceId)
-            .maybeSingle();
-        if (wsErr) throw wsErr;
-        if (!workspace) {
-            return res.status(400).json({ success: false, error: 'Selected workspace not found' });
+        if (targetWorkspaceId) {
+            if (!hasWorkspaceAdminAccess(req, targetWorkspaceId)) {
+                return res.status(403).json({ success: false, error: 'No admin access for selected workspace' });
+            }
+            const { data: workspace, error: wsErr } = await supabase
+                .from('workspaces')
+                .select('id')
+                .eq('id', targetWorkspaceId)
+                .maybeSingle();
+            if (wsErr) throw wsErr;
+            if (!workspace) {
+                return res.status(400).json({ success: false, error: 'Selected workspace not found' });
+            }
         }
 
         const password = decryptRequestPassword(requestRow.encrypted_password);
@@ -199,17 +197,20 @@ router.post('/approve', async (req, res, next) => {
 
         if (upsertErr) throw upsertErr;
 
-        const { error: memberErr } = await supabase
-            .from('workspace_members')
-            .upsert(
-                {
-                    workspace_id: targetWorkspaceId,
-                    user_email: normalizedEmail,
-                    role: role || 'member',
-                },
-                { onConflict: 'workspace_id,user_email' }
-            );
-        if (memberErr) throw memberErr;
+        // Add to workspace if one was selected
+        if (targetWorkspaceId) {
+            const { error: memberErr } = await supabase
+                .from('workspace_members')
+                .upsert(
+                    {
+                        workspace_id: targetWorkspaceId,
+                        user_email: normalizedEmail,
+                        role: role || 'member',
+                    },
+                    { onConflict: 'workspace_id,user_email' }
+                );
+            if (memberErr) throw memberErr;
+        }
 
         // Update access request status
         await supabase

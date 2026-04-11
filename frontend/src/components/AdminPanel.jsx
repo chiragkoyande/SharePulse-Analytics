@@ -415,26 +415,26 @@ export default function AdminPanel({ onClose }) {
                     <div className="admin-list">
                         {requests.length === 0 ? <p className="admin-empty">No pending requests</p> : (
                             requests.map((r) => (
-                                <div key={r.id} className="admin-item">
+                                <div key={r.id} className="admin-item" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
                                     <div className="admin-item__info">
-                                        <span className="admin-item__email">{r.email}</span>
+                                        <span className="admin-item__email" style={{ whiteSpace: 'normal', wordBreak: 'break-all' }}>{r.email}</span>
                                         <span className="admin-item__date">{formatDate(r.created_at)}</span>
                                     </div>
-                                    <div className="admin-item__actions">
+                                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                                         <select
                                             className="group-form__input"
-                                            style={{ maxWidth: 180 }}
+                                            style={{ flex: '1 1 140px', minWidth: 120 }}
                                             value={resolveRequestWorkspaceId(r)}
                                             onChange={(e) => setRequestWorkspaceById((prev) => ({ ...prev, [r.id]: e.target.value }))}
                                         >
-                                            <option value="">Assign workspace...</option>
+                                            <option value="">No workspace</option>
                                             {workspaces.map((ws) => (
                                                 <option key={ws.id} value={ws.id}>{ws.name}</option>
                                             ))}
                                         </select>
                                         <select
                                             className="group-form__input"
-                                            style={{ maxWidth: 110 }}
+                                            style={{ flex: '0 0 100px', minWidth: 90 }}
                                             value={requestRoleById[r.id] || 'member'}
                                             onChange={(e) => setRequestRoleById((prev) => ({ ...prev, [r.id]: e.target.value }))}
                                         >
@@ -444,14 +444,13 @@ export default function AdminPanel({ onClose }) {
                                         </select>
                                         <button
                                             className="admin-btn admin-btn--approve"
-                                            onClick={() => doAction('approve', { email: r.email, workspace_id: resolveRequestWorkspaceId(r), role: requestRoleById[r.id] || 'member' }, `${r.email} approved as ${requestRoleById[r.id] || 'member'}`)}
-                                            disabled={!resolveRequestWorkspaceId(r)}
+                                            onClick={() => doAction('approve', { email: r.email, workspace_id: resolveRequestWorkspaceId(r) || undefined, role: requestRoleById[r.id] || 'member' }, `${r.email} approved as ${requestRoleById[r.id] || 'member'}`)}
                                         >
                                             Approve
                                         </button>
                                         <button
                                             className="admin-btn admin-btn--reject"
-                                            onClick={() => doAction('reject', { email: r.email, workspace_id: resolveRequestWorkspaceId(r) }, `${r.email} rejected`)}
+                                            onClick={() => doAction('reject', { email: r.email, workspace_id: resolveRequestWorkspaceId(r) || undefined }, `${r.email} rejected`)}
                                         >
                                             Reject
                                         </button>
