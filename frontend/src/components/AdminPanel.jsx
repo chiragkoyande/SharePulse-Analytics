@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from './AuthContext';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
@@ -619,11 +620,9 @@ export default function AdminPanel({ onClose }) {
                                 {waSession?.qr && (
                                     <div className="wa-session-qr">
                                         <p>Scan this QR from your WhatsApp app (Linked devices):</p>
-                                        <img
-                                            className="wa-session-qr__img"
-                                            src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(waSession.qr)}`}
-                                            alt="WhatsApp QR code"
-                                        />
+                                        <div className="wa-session-qr__img" aria-label="WhatsApp QR code">
+                                            <QRCodeSVG value={waSession.qr} size={220} bgColor="#ffffff" fgColor="#111111" />
+                                        </div>
                                     </div>
                                 )}
                             </div>

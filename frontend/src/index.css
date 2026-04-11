@@ -2702,8 +2702,11 @@ a:hover {
   border-radius: 10px;
   border: 1px solid var(--border);
   background: #fff;
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   margin-bottom: 8px;
+  overflow: hidden;
 }
 
 
