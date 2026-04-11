@@ -160,11 +160,13 @@ export default function AdminPanel({ onClose }) {
             return;
         }
         loadWaSessionStatus();
+        const isWaiting = ['initializing', 'initializing-slow', 'qr'].includes(waSession?.status);
+        const interval = isWaiting ? 2000 : 5000;
         const timer = setInterval(() => {
             loadWaSessionStatus();
-        }, 5000);
+        }, interval);
         return () => clearInterval(timer);
-    }, [selectedWorkspaceId, loadWaSessionStatus]);
+    }, [selectedWorkspaceId, loadWaSessionStatus, waSession?.status]);
 
     useEffect(() => {
         loadData();

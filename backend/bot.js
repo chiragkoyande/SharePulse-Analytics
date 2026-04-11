@@ -899,7 +899,20 @@ function createBotClient(workspaceId = null) {
 async function startWorkspaceSession(workspaceId) {
     const normalizedWorkspaceId = normalizeWorkspaceId(workspaceId);
     if (!normalizedWorkspaceId) return null;
-    if (workspaceClients.has(normalizedWorkspaceId)) return workspaceClients.get(normalizedWorkspaceId);
+
+    // If a client exists, check if it's still alive
+    if (workspaceClients.has(normalizedWorkspaceId)) {
+        const runtime = getSessionRuntime(normalizedWorkspaceId);
+        // If the session is in a healthy or transitioning state, return existing client
+        if (['initializing', 'initializing-slow', 'qr', 'authenticated', 'ready'].includes(runtime.status)) {
+            return workspaceClients.get(normalizedWorkspaceId);
+        }
+        // Stale/dead client — destroy it and allow re-creation
+        console.log(`♻️  [workspace:${normalizedWorkspaceId}] Destroying stale client (status: ${runtime.status})`);
+        try { await workspaceClients.get(normalizedWorkspaceId).destroy(); } catch { /* ignore */ }
+        workspaceClients.delete(normalizedWorkspaceId);
+    }
+
     if (workspaceClientInitInProgress.has(normalizedWorkspaceId)) return null;
 
     const runtime = getSessionRuntime(normalizedWorkspaceId);
