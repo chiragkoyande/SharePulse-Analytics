@@ -32,6 +32,7 @@ export default function ResourceTable({ resources, loading, onVote, onSave, canD
                         <th>Title</th>
                         <th>URL</th>
                         <th>Domain</th>
+                        <th>Uploaded</th>
                         <th>Votes</th>
                         <th>Save</th>
                         {canDelete && <th>Remove</th>}
@@ -49,6 +50,7 @@ export default function ResourceTable({ resources, loading, onVote, onSave, canD
                             <td>
                                 <span className="resource-table__domain-badge">{r.domain || '—'}</span>
                             </td>
+                            <td className="resource-table__date">{formatDateTime(r.created_at)}</td>
                             <td>
                                 <VoteButtons resource={r} onVote={onVote} />
                             </td>
@@ -71,6 +73,7 @@ export default function ResourceTable({ resources, loading, onVote, onSave, canD
                     <div key={r.id} className="resource-card">
                         <div className="resource-card__header">
                             <h4>{r.title && r.title !== 'New Resource' ? r.title : (r.domain || 'Untitled')}</h4>
+                            <span className="resource-card__date">{formatDateTime(r.created_at)}</span>
                         </div>
                         <a className="resource-card__url" href={r.url} target="_blank" rel="noopener noreferrer">
                             {displayUrl(r.url, 50)}
@@ -188,4 +191,17 @@ function displayUrl(url, max) {
     } catch {
         return url.length > max ? url.slice(0, max) + '…' : url;
     }
+}
+
+function formatDateTime(value) {
+    if (!value) return '—';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '—';
+    return date.toLocaleString([], {
+        year: 'numeric',
+        month: 'short',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
 }
