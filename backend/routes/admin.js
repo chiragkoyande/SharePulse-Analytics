@@ -438,11 +438,11 @@ router.post('/rescan-history', async (req, res, next) => {
 
         let groupRows = [];
         if (whatsapp_group_id) {
-            groupRows = [{ whatsapp_group_id: normalizeWhatsAppGroupId(whatsapp_group_id) }];
+            groupRows = [{ whatsapp_group_id: normalizeWhatsAppGroupId(whatsapp_group_id), workspace_id: workspace_id || null }];
         } else {
             let query = supabase
                 .from('workspace_groups')
-                .select('whatsapp_group_id')
+                .select('whatsapp_group_id, workspace_id')
                 .eq('status', 'active');
             if (workspace_id) query = query.eq('workspace_id', workspace_id);
             const { data, error } = await query;
@@ -454,7 +454,7 @@ router.post('/rescan-history', async (req, res, next) => {
         for (const row of groupRows) {
             const gid = normalizeWhatsAppGroupId(row?.whatsapp_group_id);
             if (!gid) continue;
-            queued.push(requestGroupHistoryScan(gid));
+            queued.push(requestGroupHistoryScan(gid, row?.workspace_id || workspace_id || null));
         }
 
         res.json({

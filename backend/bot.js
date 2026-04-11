@@ -45,6 +45,8 @@ let groupWorkspaceMap = new Map();
 let targetGroupSet = new Set();
 let mappingRefreshTimer = null;
 let activeClient = null;
+const workspaceClients = new Map(); // workspace_id -> Client
+const workspaceClientInitInProgress = new Set();
 let historyScanInProgress = false;
 const pendingGroupHistoryScans = new Set();
 let pendingScanRetryTimer = null;
@@ -63,6 +65,35 @@ function normalizeWhatsAppGroupId(rawId) {
     if (!value) return '';
     if (value.includes('@')) return value;
     return `${value}@g.us`;
+}
+
+function normalizeWorkspaceId(rawWorkspaceId) {
+    const value = String(rawWorkspaceId || '').trim();
+    return value || null;
+}
+
+function hasAnyReadyClient() {
+    return !!activeClient || workspaceClients.size > 0;
+}
+
+function sanitizeWorkspaceForClientId(workspaceId) {
+    return String(workspaceId || '')
+        .trim()
+        .replace(/[^a-zA-Z0-9_-]/g, '_')
+        .slice(0, 56);
+}
+
+function resolveSessionClientId(workspaceId = null) {
+    if (!workspaceId) return WWEBJS_CLIENT_ID;
+    return `ws_${sanitizeWorkspaceForClientId(workspaceId)}`;
+}
+
+function getClientForWorkspace(workspaceId = null) {
+    const normalizedWorkspaceId = normalizeWorkspaceId(workspaceId);
+    if (normalizedWorkspaceId && workspaceClients.has(normalizedWorkspaceId)) {
+        return workspaceClients.get(normalizedWorkspaceId);
+    }
+    return activeClient;
 }
 
 function schedulePendingGroupHistoryScans(delayMs = 750) {
@@ -152,7 +183,7 @@ async function loadGroupMapping() {
         }
 
         // Queue automatic backfill only for groups added after initial bootstrap.
-        if (activeClient && prevTargets.size > 0) {
+        if (hasAnyReadyClient() && prevTargets.size > 0) {
             for (const groupId of targetGroupSet) {
                 if (!prevTargets.has(groupId)) {
                     pendingGroupHistoryScans.add(groupId);
@@ -161,6 +192,14 @@ async function loadGroupMapping() {
             if (pendingGroupHistoryScans.size > 0) {
                 schedulePendingGroupHistoryScans(250);
             }
+        }
+
+        // Ensure workspace-scoped bot sessions exist for active mapped workspaces.
+        const workspaceIds = [...new Set([...groupWorkspaceMap.values()].filter(Boolean))];
+        for (const workspaceId of workspaceIds) {
+            startWorkspaceSession(workspaceId).catch((err) => {
+                console.warn(`⚠️  Could not start workspace bot session (${workspaceId}): ${err?.message || err}`);
+            });
         }
     } catch (err) {
         console.error('❌ loadGroupMapping error:', err.message);
@@ -383,7 +422,7 @@ async function saveResourceToDB({ url, urlHash, title, domain, workspaceId }) {
     }
 }
 
-async function handleMessage(message, source = 'message') {
+async function handleMessage(message, source = 'message', expectedWorkspaceId = null) {
     const messageId = message?.id?._serialized;
     if (messageId) {
         if (processedMessageIds.has(messageId)) return;
@@ -413,6 +452,7 @@ async function handleMessage(message, source = 'message') {
     }
 
     const workspaceId = groupWorkspaceMap.get(chatGroupId) || null;
+    if (expectedWorkspaceId && workspaceId !== expectedWorkspaceId) return;
     const urls = collectMessageUrls(message);
     if (urls.length === 0) return;
 
@@ -527,10 +567,11 @@ async function scanHistoryBySearch(client, normalizedGroupId, workspaceId, effec
     return true;
 }
 
-async function scanHistoryForGroup(client, targetGroupId, reason = 'startup') {
+async function scanHistoryForGroup(client, targetGroupId, reason = 'startup', expectedWorkspaceId = null) {
     const normalizedGroupId = normalizeWhatsAppGroupId(targetGroupId);
     if (!normalizedGroupId) return;
     const workspaceId = groupWorkspaceMap.get(normalizedGroupId) || null;
+    if (expectedWorkspaceId && workspaceId !== expectedWorkspaceId) return;
     const effectiveLimit = reason === 'admin-add'
         ? GROUP_ADD_HISTORY_SCAN_LIMIT
         : HISTORY_SCAN_LIMIT;
@@ -628,18 +669,19 @@ async function scanHistoryForGroup(client, targetGroupId, reason = 'startup') {
     console.log(`   ✅ ${saved} new, ⏭️ ${skipped} skipped`);
 }
 
-async function scanHistory(client) {
+async function scanHistory(client, expectedWorkspaceId = null) {
     historyScanInProgress = true;
-    console.log('\n📜 Scanning old messages for links...');
+    const scopeLabel = expectedWorkspaceId ? `workspace ${expectedWorkspaceId}` : 'all workspaces';
+    console.log(`\n📜 Scanning old messages for links (${scopeLabel})...`);
     for (const targetGroupId of targetGroupSet) {
-        await scanHistoryForGroup(client, targetGroupId, 'startup');
+        await scanHistoryForGroup(client, targetGroupId, 'startup', expectedWorkspaceId);
     }
     console.log(`\n📊 History scan complete!\n`);
     historyScanInProgress = false;
 }
 
 async function processPendingGroupHistoryScans() {
-    if (!activeClient || pendingGroupHistoryScans.size === 0) return;
+    if (!hasAnyReadyClient() || pendingGroupHistoryScans.size === 0) return;
 
     if (historyScanInProgress) {
         schedulePendingGroupHistoryScans(2000);
@@ -658,7 +700,18 @@ async function processPendingGroupHistoryScans() {
                 console.log(`⚠️  Group ${groupId} is not active in workspace_groups/env; skip queued scan`);
                 continue;
             }
-            await scanHistoryForGroup(activeClient, normalizedGroupId, 'admin-add');
+            const workspaceId = groupWorkspaceMap.get(normalizedGroupId) || null;
+            const client = getClientForWorkspace(workspaceId);
+            if (!client) {
+                pendingGroupHistoryScans.add(normalizedGroupId);
+                if (workspaceId) {
+                    startWorkspaceSession(workspaceId).catch((err) => {
+                        console.warn(`⚠️  Could not start workspace bot session (${workspaceId}) for queued scan: ${err?.message || err}`);
+                    });
+                }
+                continue;
+            }
+            await scanHistoryForGroup(client, normalizedGroupId, 'admin-add', workspaceId);
         }
     } finally {
         historyScanInProgress = false;
@@ -668,26 +721,40 @@ async function processPendingGroupHistoryScans() {
     }
 }
 
-export function requestGroupHistoryScan(whatsappGroupId) {
+export function requestGroupHistoryScan(whatsappGroupId, workspaceId = null) {
     const groupId = normalizeWhatsAppGroupId(whatsappGroupId);
     if (!groupId) {
         return { queued: false, reason: 'Missing group id' };
     }
+    const normalizedWorkspaceId = normalizeWorkspaceId(workspaceId);
 
     pendingGroupHistoryScans.add(groupId);
     schedulePendingGroupHistoryScans(750);
+    if (normalizedWorkspaceId) {
+        startWorkspaceSession(normalizedWorkspaceId).catch((err) => {
+            console.warn(`⚠️  Could not start workspace bot session (${normalizedWorkspaceId}) on scan request: ${err?.message || err}`);
+        });
+    }
 
     return {
         queued: true,
         groupId,
-        botReady: !!activeClient,
+        workspaceId: normalizedWorkspaceId,
+        botReady: !!getClientForWorkspace(normalizedWorkspaceId),
     };
 }
 
-export function startBot() {
+function sessionLabel(workspaceId = null) {
+    return workspaceId ? `workspace:${workspaceId}` : 'default';
+}
+
+function createBotClient(workspaceId = null) {
+    const normalizedWorkspaceId = normalizeWorkspaceId(workspaceId);
+    const label = sessionLabel(normalizedWorkspaceId);
+    const sessionClientId = resolveSessionClientId(normalizedWorkspaceId);
 
     const client = new Client({
-        authStrategy: new LocalAuth({ clientId: WWEBJS_CLIENT_ID, dataPath: WWEBJS_DATA_PATH }),
+        authStrategy: new LocalAuth({ clientId: sessionClientId, dataPath: WWEBJS_DATA_PATH }),
         authTimeoutMs: AUTH_TIMEOUT_MS,
         qrMaxRetries: QR_MAX_RETRIES,
         takeoverOnConflict: true,
@@ -698,58 +765,61 @@ export function startBot() {
 
     client.on('qr', (qr) => {
         if (initWarningTimer) { clearTimeout(initWarningTimer); initWarningTimer = null; }
-        console.log('\n📱 Scan this QR code with WhatsApp:\n');
+        console.log(`\n📱 Scan this QR code with WhatsApp (${label}):\n`);
         qrcode.generate(qr, { small: true });
     });
 
-    client.on('loading_screen', (pct, msg) => console.log(`⏳ Loading: ${pct}% ${msg || ''}`));
+    client.on('loading_screen', (pct, msg) => console.log(`⏳ [${label}] Loading: ${pct}% ${msg || ''}`));
     client.on('authenticated', () => {
         if (initWarningTimer) { clearTimeout(initWarningTimer); initWarningTimer = null; }
-        console.log('🔐 Authenticated');
+        console.log(`🔐 [${label}] Authenticated`);
     });
-    client.on('change_state', (s) => console.log(`ℹ️  WA state: ${s}`));
+    client.on('change_state', (s) => console.log(`ℹ️  [${label}] WA state: ${s}`));
 
     client.on('ready', async () => {
         if (initWarningTimer) { clearTimeout(initWarningTimer); initWarningTimer = null; }
-        activeClient = client;
-        console.log('\n✅ WhatsApp client ready!');
+        if (normalizedWorkspaceId) workspaceClients.set(normalizedWorkspaceId, client);
+        else activeClient = client;
+        console.log(`\n✅ WhatsApp client ready (${label})!`);
         try {
             if (DEBUG_GROUP_MATCH) {
                 try {
                     const chats = await client.getChats();
                     const groups = chats.filter((c) => c.isGroup).slice(0, 30);
-                    console.log(`📋 Visible WhatsApp groups (${groups.length} shown):`);
+                    console.log(`📋 [${label}] Visible WhatsApp groups (${groups.length} shown):`);
                     groups.forEach((g) => console.log(`   • ${g.name || 'Unnamed'} -> ${g.id?._serialized || 'unknown'}`));
                 } catch (err) {
-                    console.warn(`⚠️  Could not list groups: ${err.message}`);
+                    console.warn(`⚠️  [${label}] Could not list groups: ${err.message}`);
                 }
             }
             await loadGroupMapping();
-            if (mappingRefreshTimer) clearInterval(mappingRefreshTimer);
-            mappingRefreshTimer = setInterval(() => {
-                loadGroupMapping().catch((err) => {
-                    console.warn(`⚠️  Group mapping refresh failed: ${err.message}`);
-                });
-            }, GROUP_MAPPING_REFRESH_MS);
-            console.log(`🔄 Group mapping auto-refresh every ${Math.round(GROUP_MAPPING_REFRESH_MS / 1000)}s`);
-            console.log('🔍 Monitoring groups…');
+            if (!mappingRefreshTimer) {
+                mappingRefreshTimer = setInterval(() => {
+                    loadGroupMapping().catch((err) => {
+                        console.warn(`⚠️  Group mapping refresh failed: ${err.message}`);
+                    });
+                }, GROUP_MAPPING_REFRESH_MS);
+                console.log(`🔄 Group mapping auto-refresh every ${Math.round(GROUP_MAPPING_REFRESH_MS / 1000)}s`);
+            }
+            console.log(`🔍 [${label}] Monitoring groups…`);
             if (HISTORY_SCAN_START_DELAY_MS > 0) {
-                console.log(`⏳ Waiting ${Math.round(HISTORY_SCAN_START_DELAY_MS / 1000)}s before history scan…`);
+                console.log(`⏳ [${label}] Waiting ${Math.round(HISTORY_SCAN_START_DELAY_MS / 1000)}s before history scan…`);
                 await sleep(HISTORY_SCAN_START_DELAY_MS);
             }
-            await scanHistory(client);
+            await scanHistory(client, normalizedWorkspaceId);
             await processPendingGroupHistoryScans();
-            console.log('⏳ Waiting for new messages…\n');
+            console.log(`⏳ [${label}] Waiting for new messages…\n`);
         } catch (err) {
-            console.error(`⚠️  Ready-handler error: ${err?.message || err}`);
+            console.error(`⚠️  [${label}] Ready-handler error: ${err?.message || err}`);
         }
     });
 
-    client.on('auth_failure', (msg) => console.error('❌ Auth failure:', msg));
+    client.on('auth_failure', (msg) => console.error(`❌ [${label}] Auth failure:`, msg));
     client.on('disconnected', () => {
-        console.warn('⚠️  Disconnected — reconnecting in 5s');
-        activeClient = null;
-        if (mappingRefreshTimer) {
+        console.warn(`⚠️  [${label}] Disconnected — reconnecting in 5s`);
+        if (normalizedWorkspaceId) workspaceClients.delete(normalizedWorkspaceId);
+        else activeClient = null;
+        if (!activeClient && workspaceClients.size === 0 && mappingRefreshTimer) {
             clearInterval(mappingRefreshTimer);
             mappingRefreshTimer = null;
         }
@@ -758,30 +828,65 @@ export function startBot() {
 
     client.on('message', async (m) => {
         try {
-            await handleMessage(m, 'message');
+            await handleMessage(m, 'message', normalizedWorkspaceId);
         } catch (err) {
-            console.error(`❌ Message handler error: ${err?.message || err}`);
+            console.error(`❌ [${label}] Message handler error: ${err?.message || err}`);
         }
     });
     client.on('message_create', async (m) => {
         try {
-            await handleMessage(m, 'message_create');
+            await handleMessage(m, 'message_create', normalizedWorkspaceId);
         } catch (err) {
-            console.error(`❌ message_create handler error: ${err?.message || err}`);
+            console.error(`❌ [${label}] message_create handler error: ${err?.message || err}`);
         }
     });
 
-    console.log('\n🚀 Initializing WhatsApp client…\n');
+    console.log(`\n🚀 Initializing WhatsApp client (${label})…\n`);
     initWarningTimer = setTimeout(() => {
-        console.warn(`⚠️  Init taking >${INIT_WARNING_TIMEOUT_MS / 1000}s`);
+        console.warn(`⚠️  [${label}] Init taking >${INIT_WARNING_TIMEOUT_MS / 1000}s`);
     }, INIT_WARNING_TIMEOUT_MS);
 
     client.initialize().catch((err) => {
         if (initWarningTimer) { clearTimeout(initWarningTimer); initWarningTimer = null; }
-        console.error('❌ Fatal:', err?.message || err);
+        console.error(`❌ [${label}] Fatal:`, err?.message || err);
     });
 
     return client;
+}
+
+async function startWorkspaceSession(workspaceId) {
+    const normalizedWorkspaceId = normalizeWorkspaceId(workspaceId);
+    if (!normalizedWorkspaceId) return null;
+    if (workspaceClients.has(normalizedWorkspaceId)) return workspaceClients.get(normalizedWorkspaceId);
+    if (workspaceClientInitInProgress.has(normalizedWorkspaceId)) return null;
+
+    workspaceClientInitInProgress.add(normalizedWorkspaceId);
+    try {
+        return createBotClient(normalizedWorkspaceId);
+    } finally {
+        workspaceClientInitInProgress.delete(normalizedWorkspaceId);
+    }
+}
+
+export function startBot() {
+    const defaultClient = createBotClient(null);
+
+    return {
+        async destroy() {
+            const clients = [];
+            if (defaultClient) clients.push(defaultClient);
+            for (const client of workspaceClients.values()) clients.push(client);
+            for (const client of clients) {
+                try { await client.destroy(); } catch { /* ignore */ }
+            }
+            workspaceClients.clear();
+            activeClient = null;
+            if (mappingRefreshTimer) {
+                clearInterval(mappingRefreshTimer);
+                mappingRefreshTimer = null;
+            }
+        },
+    };
 }
 
 export { fetchPageTitle };

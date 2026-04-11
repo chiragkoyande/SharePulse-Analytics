@@ -327,7 +327,7 @@ router.post('/workspaces/:workspace_id/groups', requireAuth, requireWorkspaceAcc
             throw error;
         }
 
-        const scanStatus = requestGroupHistoryScan(data.whatsapp_group_id);
+        const scanStatus = requestGroupHistoryScan(data.whatsapp_group_id, workspace_id);
 
         res.status(201).json({
             success: true,
