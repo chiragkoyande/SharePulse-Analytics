@@ -24,6 +24,9 @@ const HISTORY_SCAN_BATCH_SIZE = Number(process.env.HISTORY_SCAN_BATCH_SIZE || 20
 const GROUP_MAPPING_REFRESH_MS = Number(process.env.GROUP_MAPPING_REFRESH_MS || 30000);
 const PROCESS_SELF_MESSAGES = process.env.PROCESS_SELF_MESSAGES !== 'false';
 const BLACKLIST_LOG_WINDOW_MS = Number(process.env.BLACKLIST_LOG_WINDOW_MS || 600000); // 10 min
+const CHAT_FETCH_RETRY_COUNT = Math.max(1, Number(process.env.CHAT_FETCH_RETRY_COUNT || 12));
+const CHAT_FETCH_RETRY_DELAY_MS = Math.max(250, Number(process.env.CHAT_FETCH_RETRY_DELAY_MS || 3000));
+const HISTORY_SCAN_START_DELAY_MS = Math.max(0, Number(process.env.HISTORY_SCAN_START_DELAY_MS || 8000));
 const SYSTEM_CHROME_CANDIDATES = [
     '/usr/bin/google-chrome',
     '/usr/bin/google-chrome-stable',
@@ -45,6 +48,15 @@ let activeClient = null;
 let historyScanInProgress = false;
 const pendingGroupHistoryScans = new Set();
 let pendingScanRetryTimer = null;
+
+function isChatLoadingError(err) {
+    const msg = String(err?.message || err || '').toLowerCase();
+    return msg.includes('waitforchatloading');
+}
+
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function normalizeWhatsAppGroupId(rawId) {
     const value = String(rawId || '').trim();
@@ -139,8 +151,8 @@ async function loadGroupMapping() {
             console.log(`   ✅ ${targetGroupSet.size} group(s) monitored, ${groupWorkspaceMap.size} mapped to workspaces`);
         }
 
-        // Queue automatic backfill for newly seen groups while bot is running.
-        if (activeClient) {
+        // Queue automatic backfill only for groups added after initial bootstrap.
+        if (activeClient && prevTargets.size > 0) {
             for (const groupId of targetGroupSet) {
                 if (!prevTargets.has(groupId)) {
                     pendingGroupHistoryScans.add(groupId);
@@ -437,6 +449,84 @@ async function handleMessage(message, source = 'message') {
     }
 }
 
+async function scanHistoryBySearch(client, normalizedGroupId, workspaceId, effectiveLimit) {
+    console.log(`   🔎 Falling back to search-based history scan for ${normalizedGroupId.slice(0, 12)}…`);
+    let saved = 0;
+    let skipped = 0;
+    let scannedMessages = 0;
+    const seenIds = new Set();
+    let page = 1;
+    const pageSizeBase = Math.min(HISTORY_SCAN_BATCH_SIZE, 200);
+
+    while (effectiveLimit <= 0 || scannedMessages < effectiveLimit) {
+        const remaining = effectiveLimit > 0 ? (effectiveLimit - scannedMessages) : pageSizeBase;
+        const pageSize = Math.min(pageSizeBase, remaining);
+        let messages = [];
+        try {
+            messages = await client.searchMessages('http', {
+                chatId: normalizedGroupId,
+                page,
+                limit: pageSize,
+            });
+        } catch (err) {
+            console.warn(`   ⚠️  Search fallback failed on page ${page}: ${err?.message || err}`);
+            break;
+        }
+
+        if (!messages || messages.length === 0) break;
+        page += 1;
+
+        for (const msg of messages) {
+            const msgId = msg?.id?._serialized;
+            if (msgId && seenIds.has(msgId)) continue;
+            if (msgId) seenIds.add(msgId);
+
+            scannedMessages++;
+            const urls = collectMessageUrls(msg);
+            if (urls.length === 0) continue;
+
+            for (const url of urls) {
+                if (isBlacklisted(url)) {
+                    if (DEBUG_GROUP_MATCH && shouldLogBlacklisted(url)) {
+                        console.log(`   ⛔ Blacklisted URL skipped: ${url}`);
+                    }
+                    continue;
+                }
+                const legacyHash = hashUrl(url);
+                const scopedHash = hashUrlForWorkspace(url, workspaceId);
+                if (hasRecentHash(scopedHash) || hasRecentHash(legacyHash)) { skipped++; continue; }
+
+                const dedup = await resolveResourceHash({ legacyHash, scopedHash, workspaceId });
+                if (dedup.skip) {
+                    if (dedup.reason === 'duplicate-same-workspace' || dedup.reason === 'adopted-legacy' || dedup.reason === 'duplicate-legacy') {
+                        await bumpShareCount(dedup.existing, dedup.reason);
+                    }
+                    markRecentHash(dedup.hashToUse);
+                    skipped++;
+                    continue;
+                }
+                const title = await fetchPageTitle(url);
+                const domain = extractDomain(url);
+                const result = await saveResourceToDB({ url, urlHash: dedup.hashToUse, title, domain, workspaceId });
+                if (result.saved) { saved++; markRecentHash(dedup.hashToUse); }
+                if (result.duplicate) { skipped++; markRecentHash(dedup.hashToUse); }
+            }
+        }
+
+        if (messages.length < pageSize) break;
+    }
+
+    if (scannedMessages === 0) {
+        console.log('   ℹ️  Search fallback returned no messages');
+        return false;
+    }
+    if (DEBUG_GROUP_MATCH) {
+        console.log(`   ℹ️  Fallback scanned messages: ${scannedMessages}`);
+    }
+    console.log(`   ✅ ${saved} new, ⏭️ ${skipped} skipped (search fallback)`);
+    return true;
+}
+
 async function scanHistoryForGroup(client, targetGroupId, reason = 'startup') {
     const normalizedGroupId = normalizeWhatsAppGroupId(targetGroupId);
     if (!normalizedGroupId) return;
@@ -452,6 +542,7 @@ async function scanHistoryForGroup(client, targetGroupId, reason = 'startup') {
     try { chat = await client.getChatById(normalizedGroupId); }
     catch { console.log('  ⚠️  Could not find group'); return; }
     if (!chat) return;
+    try { await chat.syncHistory(); } catch { /* best effort */ }
 
     let saved = 0;
     let skipped = 0;
@@ -463,7 +554,29 @@ async function scanHistoryForGroup(client, targetGroupId, reason = 'startup') {
         const remaining = effectiveLimit > 0 ? (effectiveLimit - scannedMessages) : HISTORY_SCAN_BATCH_SIZE;
         const batchLimit = Math.min(HISTORY_SCAN_BATCH_SIZE, remaining);
         const options = beforeMsgId ? { limit: batchLimit, before: beforeMsgId } : { limit: batchLimit };
-        const messages = await chat.fetchMessages(options);
+        let messages = null;
+        for (let attempt = 1; attempt <= CHAT_FETCH_RETRY_COUNT; attempt++) {
+            try {
+                messages = await chat.fetchMessages(options);
+                break;
+            } catch (err) {
+                if (!isChatLoadingError(err)) throw err;
+                if (attempt >= CHAT_FETCH_RETRY_COUNT) {
+                    console.warn(`   ⚠️  Chat loading failed for ${normalizedGroupId.slice(0, 12)}… after ${attempt} retries; skipping this group scan for now`);
+                    messages = null;
+                    break;
+                }
+                try { await chat.syncHistory(); } catch { /* best effort */ }
+                const waitMs = CHAT_FETCH_RETRY_DELAY_MS * attempt;
+                console.warn(`   ⚠️  Chat loading not ready for ${normalizedGroupId.slice(0, 12)}… (retry ${attempt}/${CHAT_FETCH_RETRY_COUNT - 1})`);
+                await sleep(waitMs);
+            }
+        }
+        if (messages === null) {
+            const fallbackDone = await scanHistoryBySearch(client, normalizedGroupId, workspaceId, effectiveLimit);
+            if (fallbackDone) return;
+            break;
+        }
         if (!messages || messages.length === 0) break;
 
         for (const msg of messages) {
@@ -600,28 +713,36 @@ export function startBot() {
         if (initWarningTimer) { clearTimeout(initWarningTimer); initWarningTimer = null; }
         activeClient = client;
         console.log('\n✅ WhatsApp client ready!');
-        if (DEBUG_GROUP_MATCH) {
-            try {
-                const chats = await client.getChats();
-                const groups = chats.filter((c) => c.isGroup).slice(0, 30);
-                console.log(`📋 Visible WhatsApp groups (${groups.length} shown):`);
-                groups.forEach((g) => console.log(`   • ${g.name || 'Unnamed'} -> ${g.id?._serialized || 'unknown'}`));
-            } catch (err) {
-                console.warn(`⚠️  Could not list groups: ${err.message}`);
+        try {
+            if (DEBUG_GROUP_MATCH) {
+                try {
+                    const chats = await client.getChats();
+                    const groups = chats.filter((c) => c.isGroup).slice(0, 30);
+                    console.log(`📋 Visible WhatsApp groups (${groups.length} shown):`);
+                    groups.forEach((g) => console.log(`   • ${g.name || 'Unnamed'} -> ${g.id?._serialized || 'unknown'}`));
+                } catch (err) {
+                    console.warn(`⚠️  Could not list groups: ${err.message}`);
+                }
             }
+            await loadGroupMapping();
+            if (mappingRefreshTimer) clearInterval(mappingRefreshTimer);
+            mappingRefreshTimer = setInterval(() => {
+                loadGroupMapping().catch((err) => {
+                    console.warn(`⚠️  Group mapping refresh failed: ${err.message}`);
+                });
+            }, GROUP_MAPPING_REFRESH_MS);
+            console.log(`🔄 Group mapping auto-refresh every ${Math.round(GROUP_MAPPING_REFRESH_MS / 1000)}s`);
+            console.log('🔍 Monitoring groups…');
+            if (HISTORY_SCAN_START_DELAY_MS > 0) {
+                console.log(`⏳ Waiting ${Math.round(HISTORY_SCAN_START_DELAY_MS / 1000)}s before history scan…`);
+                await sleep(HISTORY_SCAN_START_DELAY_MS);
+            }
+            await scanHistory(client);
+            await processPendingGroupHistoryScans();
+            console.log('⏳ Waiting for new messages…\n');
+        } catch (err) {
+            console.error(`⚠️  Ready-handler error: ${err?.message || err}`);
         }
-        await loadGroupMapping();
-        if (mappingRefreshTimer) clearInterval(mappingRefreshTimer);
-        mappingRefreshTimer = setInterval(() => {
-            loadGroupMapping().catch((err) => {
-                console.warn(`⚠️  Group mapping refresh failed: ${err.message}`);
-            });
-        }, GROUP_MAPPING_REFRESH_MS);
-        console.log(`🔄 Group mapping auto-refresh every ${Math.round(GROUP_MAPPING_REFRESH_MS / 1000)}s`);
-        console.log('🔍 Monitoring groups…');
-        await scanHistory(client);
-        await processPendingGroupHistoryScans();
-        console.log('⏳ Waiting for new messages…\n');
     });
 
     client.on('auth_failure', (msg) => console.error('❌ Auth failure:', msg));
