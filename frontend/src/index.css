@@ -697,7 +697,8 @@ body {
   backdrop-filter: blur(12px);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   box-shadow: var(--shadow-sm);
 }
 
@@ -729,6 +730,7 @@ body {
 
 .resource-table {
   width: 100%;
+  min-width: 1120px;
   border-collapse: collapse;
 }
 
@@ -777,6 +779,41 @@ body {
   vertical-align: middle;
 }
 
+.resource-table thead th:nth-child(1),
+.resource-table tbody td:nth-child(1) {
+  min-width: 200px;
+}
+
+.resource-table thead th:nth-child(2),
+.resource-table tbody td:nth-child(2) {
+  min-width: 260px;
+}
+
+.resource-table thead th:nth-child(3),
+.resource-table tbody td:nth-child(3) {
+  min-width: 150px;
+}
+
+.resource-table thead th:nth-child(4),
+.resource-table tbody td:nth-child(4) {
+  min-width: 170px;
+}
+
+.resource-table thead th:nth-child(5),
+.resource-table tbody td:nth-child(5) {
+  min-width: 160px;
+}
+
+.resource-table thead th:nth-child(6),
+.resource-table tbody td:nth-child(6) {
+  min-width: 100px;
+}
+
+.resource-table thead th:nth-child(7),
+.resource-table tbody td:nth-child(7) {
+  min-width: 110px;
+}
+
 .resource-table__title {
   font-weight: 600;
   color: var(--text-primary) !important;
@@ -787,9 +824,13 @@ body {
 }
 
 .resource-table__url a {
+  display: inline-block;
+  max-width: 100%;
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.78rem;
-  word-break: break-all;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--accent-1);
   text-decoration: none;
   transition: color 0.2s;
@@ -824,6 +865,7 @@ body {
   display: flex;
   gap: 6px;
   align-items: center;
+  flex-wrap: nowrap;
 }
 
 .save-btn {
@@ -1416,7 +1458,7 @@ body {
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.7rem;
     color: var(--text-muted);
-    white-space: nowrap;
+    white-space: normal;
   }
 
   .resource-card__url {
@@ -1444,6 +1486,20 @@ body {
     gap: 8px;
     align-items: center;
     flex-wrap: wrap;
+  }
+
+  .resource-card__actions .vote-buttons {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .resource-card__actions .vote-btn,
+  .resource-card__actions .save-btn,
+  .resource-card__actions .resource-delete-btn {
+    width: 100%;
+    justify-content: center;
   }
 
   .controls-row {
@@ -1507,6 +1563,32 @@ body {
 
   .top-domains__list {
     flex-direction: column;
+  }
+
+  .data-shell {
+    padding: 10px;
+  }
+
+  .resource-cards {
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .resource-card {
+    padding: 14px;
+  }
+
+  .resource-card__header {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .resource-card__header h4 {
+    margin-right: 0;
+  }
+
+  .resource-card__date {
+    font-size: 0.68rem;
   }
 }
 
