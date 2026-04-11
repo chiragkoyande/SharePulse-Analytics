@@ -697,8 +697,7 @@ body {
   backdrop-filter: blur(12px);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: hidden;
   box-shadow: var(--shadow-sm);
 }
 
@@ -730,12 +729,12 @@ body {
 
 .resource-table {
   width: 100%;
-  min-width: 1120px;
+  table-layout: fixed;
   border-collapse: collapse;
 }
 
 .resource-table thead th {
-  padding: 14px 18px;
+  padding: 12px 12px;
   text-align: left;
   font-size: 0.7rem;
   font-weight: 700;
@@ -772,7 +771,7 @@ body {
 }
 
 .resource-table__row td {
-  padding: 14px 18px;
+  padding: 12px 12px;
   font-size: 0.85rem;
   color: var(--text-secondary);
   border-bottom: 1px solid var(--border);
@@ -781,37 +780,37 @@ body {
 
 .resource-table thead th:nth-child(1),
 .resource-table tbody td:nth-child(1) {
-  min-width: 200px;
+  width: 22%;
 }
 
 .resource-table thead th:nth-child(2),
 .resource-table tbody td:nth-child(2) {
-  min-width: 260px;
+  width: 20%;
 }
 
 .resource-table thead th:nth-child(3),
 .resource-table tbody td:nth-child(3) {
-  min-width: 150px;
+  width: 15%;
 }
 
 .resource-table thead th:nth-child(4),
 .resource-table tbody td:nth-child(4) {
-  min-width: 170px;
+  width: 16%;
 }
 
 .resource-table thead th:nth-child(5),
 .resource-table tbody td:nth-child(5) {
-  min-width: 160px;
+  width: 14%;
 }
 
 .resource-table thead th:nth-child(6),
 .resource-table tbody td:nth-child(6) {
-  min-width: 100px;
+  width: 7%;
 }
 
 .resource-table thead th:nth-child(7),
 .resource-table tbody td:nth-child(7) {
-  min-width: 110px;
+  width: 6%;
 }
 
 .resource-table__title {
@@ -827,7 +826,7 @@ body {
   display: inline-block;
   max-width: 100%;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -843,11 +842,11 @@ body {
 
 .resource-table__domain-badge {
   display: inline-block;
-  padding: 4px 12px;
+  padding: 3px 9px;
   border-radius: var(--radius-pill);
   background: linear-gradient(135deg, rgba(124, 58, 237, 0.1), rgba(6, 182, 212, 0.08));
   color: var(--accent-1);
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 600;
   font-family: 'JetBrains Mono', monospace;
   letter-spacing: 0.01em;
@@ -863,23 +862,23 @@ body {
 
 .vote-buttons {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   align-items: center;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
 }
 
 .save-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 72px;
-  padding: 5px 12px;
+  min-width: 62px;
+  padding: 4px 9px;
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
   background: var(--bg-input);
   color: var(--text-secondary);
   font-family: inherit;
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
@@ -906,8 +905,8 @@ body {
   background: rgba(239, 68, 68, 0.14);
   color: #fecaca;
   border-radius: 10px;
-  padding: 8px 10px;
-  font-size: 0.78rem;
+  padding: 6px 8px;
+  font-size: 0.72rem;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -931,13 +930,13 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 5px 12px;
+  padding: 4px 8px;
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
   background: var(--bg-input);
   color: var(--text-secondary);
   font-family: inherit;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
@@ -1236,7 +1235,7 @@ body {
 .resource-table__date {
   white-space: nowrap;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.74rem !important;
+  font-size: 0.68rem !important;
   color: var(--text-muted) !important;
 }
 
