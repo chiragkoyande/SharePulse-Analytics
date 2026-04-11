@@ -36,7 +36,7 @@ export default function WorkspaceSwitcher() {
             {open && (
                 <div className="ws-switcher__dropdown">
                     <div className="ws-switcher__header">Workspaces</div>
-                    {(isSuperAdmin || workspaces.length > 1) && (
+                    {isSuperAdmin && (
                         <button
                             type="button"
                             className={`ws-switcher__item ${!activeWorkspaceId ? 'ws-switcher__item--active' : ''}`}

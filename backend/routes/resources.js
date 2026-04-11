@@ -5,29 +5,58 @@ import { requireAuth } from '../middleware/authMiddleware.js';
 const router = Router();
 
 /**
- * Helper: resolve workspace_id from query/body.
- * Super admins can omit workspace_id for global view.
+ * Helper: resolve workspace scope from query/body + user context.
+ * Non-super-admins are restricted to their own workspace memberships.
  */
 function getWorkspaceScope(req) {
-    return req.query.workspace_id || req.body?.workspace_id || null;
+    const explicit = req.query.workspace_id || req.body?.workspace_id || null;
+    const isSuperAdmin = !!req.user?.isSuperAdmin;
+    const userWorkspaceIds = (req.user?.workspaces || []).map((w) => w.id);
+
+    // If a specific workspace is requested, verify access
+    if (explicit) {
+        if (!isSuperAdmin && !userWorkspaceIds.includes(explicit)) {
+            return { denied: true };
+        }
+        return { workspaceId: explicit, userWorkspaceIds, isSuperAdmin };
+    }
+
+    // No explicit workspace — super admins see everything, others see only their workspaces
+    return { workspaceId: null, userWorkspaceIds, isSuperAdmin };
+}
+
+/**
+ * Apply workspace filtering to a Supabase query.
+ */
+function applyWorkspaceFilter(query, scope) {
+    if (scope.workspaceId) {
+        return query.eq('workspace_id', scope.workspaceId);
+    }
+    if (!scope.isSuperAdmin && scope.userWorkspaceIds.length > 0) {
+        return query.in('workspace_id', scope.userWorkspaceIds);
+    }
+    if (!scope.isSuperAdmin && scope.userWorkspaceIds.length === 0) {
+        // User has no workspaces — return nothing
+        return query.eq('workspace_id', '00000000-0000-0000-0000-000000000000');
+    }
+    return query; // super admin, no filter
 }
 
 // ── GET /resources ───────────────────────────
 
-router.get('/resources', async (req, res, next) => {
+router.get('/resources', requireAuth, async (req, res, next) => {
     try {
         const sort = req.query.sort || 'newest';
         const limit = Math.min(parseInt(req.query.limit) || 100, 500);
         const offset = parseInt(req.query.offset) || 0;
-        const workspaceId = getWorkspaceScope(req);
+        const scope = getWorkspaceScope(req);
+        if (scope.denied) return res.status(403).json({ success: false, error: 'No access to this workspace' });
 
         let query = supabase
             .from('resources')
             .select('*', { count: 'exact' });
 
-        if (workspaceId) {
-            query = query.eq('workspace_id', workspaceId);
-        }
+        query = applyWorkspaceFilter(query, scope);
 
         if (sort === 'popular') {
             query = query
@@ -50,10 +79,11 @@ router.get('/resources', async (req, res, next) => {
 
 // ── GET /resources/search?q= ─────────────────
 
-router.get('/resources/search', async (req, res, next) => {
+router.get('/resources/search', requireAuth, async (req, res, next) => {
     try {
         const q = req.query.q || '';
-        const workspaceId = getWorkspaceScope(req);
+        const scope = getWorkspaceScope(req);
+        if (scope.denied) return res.status(403).json({ success: false, error: 'No access to this workspace' });
         if (!q.trim()) return res.json({ success: true, count: 0, data: [] });
 
         let query = supabase
@@ -61,9 +91,7 @@ router.get('/resources/search', async (req, res, next) => {
             .select('*')
             .or(`url.ilike.%${q}%,title.ilike.%${q}%,domain.ilike.%${q}%`);
 
-        if (workspaceId) {
-            query = query.eq('workspace_id', workspaceId);
-        }
+        query = applyWorkspaceFilter(query, scope);
 
         const { data, error } = await query
             .order('created_at', { ascending: false })
@@ -79,22 +107,23 @@ router.get('/resources/search', async (req, res, next) => {
 
 // ── GET /stats ───────────────────────────────
 
-router.get('/stats', async (req, res, next) => {
+router.get('/stats', requireAuth, async (req, res, next) => {
     try {
-        const workspaceId = getWorkspaceScope(req);
+        const scope = getWorkspaceScope(req);
+        if (scope.denied) return res.status(403).json({ success: false, error: 'No access to this workspace' });
 
         // Total count
         let totalQuery = supabase
             .from('resources')
             .select('*', { count: 'exact', head: true });
-        if (workspaceId) totalQuery = totalQuery.eq('workspace_id', workspaceId);
+        totalQuery = applyWorkspaceFilter(totalQuery, scope);
         const { count: total } = await totalQuery;
 
         // All resources for aggregation
         let allQuery = supabase
             .from('resources')
             .select('share_count, like_count, dislike_count, domain');
-        if (workspaceId) allQuery = allQuery.eq('workspace_id', workspaceId);
+        allQuery = applyWorkspaceFilter(allQuery, scope);
         const { data: all } = await allQuery;
 
         // Compute totals
@@ -121,7 +150,7 @@ router.get('/stats', async (req, res, next) => {
             .from('resources')
             .select('*', { count: 'exact', head: true })
             .gte('created_at', todayStr);
-        if (workspaceId) todayQuery = todayQuery.eq('workspace_id', workspaceId);
+        todayQuery = applyWorkspaceFilter(todayQuery, scope);
         const { count: todayCount } = await todayQuery;
 
         res.json({
@@ -353,18 +382,17 @@ router.post('/save-link', requireAuth, async (req, res, next) => {
 
 // ── GET /export/csv ──────────────────────────
 
-router.get('/export/csv', async (req, res, next) => {
+router.get('/export/csv', requireAuth, async (req, res, next) => {
     try {
-        const workspaceId = getWorkspaceScope(req);
+        const scope = getWorkspaceScope(req);
+        if (scope.denied) return res.status(403).json({ success: false, error: 'No access to this workspace' });
 
         let query = supabase
             .from('resources')
             .select('url, url_hash, title, domain, like_count, dislike_count, share_count, created_at')
             .order('created_at', { ascending: false });
 
-        if (workspaceId) {
-            query = query.eq('workspace_id', workspaceId);
-        }
+        query = applyWorkspaceFilter(query, scope);
 
         const { data, error } = await query;
 
