@@ -624,12 +624,6 @@ export default function AdminPanel({ onClose }) {
                                             src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(waSession.qr)}`}
                                             alt="WhatsApp QR code"
                                         />
-                                        <p className="wa-session-qr__fallback-label">Fallback QR text:</p>
-                                        <textarea
-                                            readOnly
-                                            value={waSession.qr}
-                                            className="wa-session-qr__text"
-                                        />
                                     </div>
                                 )}
                             </div>
