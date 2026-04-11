@@ -230,13 +230,7 @@ async function loadGroupMapping() {
             }
         }
 
-        // Ensure workspace-scoped bot sessions exist for active mapped workspaces.
-        const workspaceIds = [...new Set([...groupWorkspaceMap.values()].filter(Boolean))];
-        for (const workspaceId of workspaceIds) {
-            startWorkspaceSession(workspaceId).catch((err) => {
-                console.warn(`⚠️  Could not start workspace bot session (${workspaceId}): ${err?.message || err}`);
-            });
-        }
+        // Workspace sessions are started on explicit connect / scan requests.
     } catch (err) {
         console.error('❌ loadGroupMapping error:', err.message);
     }
@@ -799,6 +793,7 @@ function createBotClient(workspaceId = null) {
         puppeteer: getPuppeteerOptions(),
     });
     let initWarningTimer = null;
+    if (normalizedWorkspaceId) workspaceClients.set(normalizedWorkspaceId, client);
 
     client.on('qr', (qr) => {
         if (initWarningTimer) { clearTimeout(initWarningTimer); initWarningTimer = null; }
@@ -817,8 +812,7 @@ function createBotClient(workspaceId = null) {
 
     client.on('ready', async () => {
         if (initWarningTimer) { clearTimeout(initWarningTimer); initWarningTimer = null; }
-        if (normalizedWorkspaceId) workspaceClients.set(normalizedWorkspaceId, client);
-        else activeClient = client;
+        if (!normalizedWorkspaceId) activeClient = client;
         updateSessionRuntime(normalizedWorkspaceId, { status: 'ready', qr: null, error: null });
         console.log(`\n✅ WhatsApp client ready (${label})!`);
         try {
@@ -856,6 +850,7 @@ function createBotClient(workspaceId = null) {
 
     client.on('auth_failure', (msg) => {
         updateSessionRuntime(normalizedWorkspaceId, { status: 'auth_failure', error: String(msg || 'auth failure') });
+        if (normalizedWorkspaceId) workspaceClients.delete(normalizedWorkspaceId);
         console.error(`❌ [${label}] Auth failure:`, msg);
     });
     client.on('disconnected', () => {
@@ -893,6 +888,7 @@ function createBotClient(workspaceId = null) {
 
     client.initialize().catch((err) => {
         if (initWarningTimer) { clearTimeout(initWarningTimer); initWarningTimer = null; }
+        if (normalizedWorkspaceId) workspaceClients.delete(normalizedWorkspaceId);
         updateSessionRuntime(normalizedWorkspaceId, { status: 'fatal', error: String(err?.message || err) });
         console.error(`❌ [${label}] Fatal:`, err?.message || err);
     });
@@ -905,6 +901,11 @@ async function startWorkspaceSession(workspaceId) {
     if (!normalizedWorkspaceId) return null;
     if (workspaceClients.has(normalizedWorkspaceId)) return workspaceClients.get(normalizedWorkspaceId);
     if (workspaceClientInitInProgress.has(normalizedWorkspaceId)) return null;
+
+    const runtime = getSessionRuntime(normalizedWorkspaceId);
+    if (['initializing', 'initializing-slow', 'qr', 'authenticated', 'ready'].includes(runtime.status)) {
+        return null;
+    }
 
     workspaceClientInitInProgress.add(normalizedWorkspaceId);
     try {
