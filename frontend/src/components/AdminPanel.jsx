@@ -423,17 +423,6 @@ export default function AdminPanel({ onClose }) {
                                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                                         <select
                                             className="group-form__input"
-                                            style={{ flex: '1 1 140px', minWidth: 120 }}
-                                            value={resolveRequestWorkspaceId(r)}
-                                            onChange={(e) => setRequestWorkspaceById((prev) => ({ ...prev, [r.id]: e.target.value }))}
-                                        >
-                                            <option value="">No workspace</option>
-                                            {workspaces.map((ws) => (
-                                                <option key={ws.id} value={ws.id}>{ws.name}</option>
-                                            ))}
-                                        </select>
-                                        <select
-                                            className="group-form__input"
                                             style={{ flex: '0 0 100px', minWidth: 90 }}
                                             value={requestRoleById[r.id] || 'member'}
                                             onChange={(e) => setRequestRoleById((prev) => ({ ...prev, [r.id]: e.target.value }))}
@@ -442,9 +431,27 @@ export default function AdminPanel({ onClose }) {
                                             <option value="admin">Admin</option>
                                             <option value="owner">Owner</option>
                                         </select>
+                                        {(requestRoleById[r.id] || 'member') !== 'owner' ? (
+                                            <select
+                                                className="group-form__input"
+                                                style={{ flex: '1 1 140px', minWidth: 120 }}
+                                                value={resolveRequestWorkspaceId(r)}
+                                                onChange={(e) => setRequestWorkspaceById((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                                            >
+                                                <option value="">Select workspace...</option>
+                                                {workspaces.map((ws) => (
+                                                    <option key={ws.id} value={ws.id}>{ws.name}</option>
+                                                ))}
+                                            </select>
+                                        ) : (
+                                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                                Will create own workspace
+                                            </span>
+                                        )}
                                         <button
                                             className="admin-btn admin-btn--approve"
                                             onClick={() => doAction('approve', { email: r.email, workspace_id: resolveRequestWorkspaceId(r) || undefined, role: requestRoleById[r.id] || 'member' }, `${r.email} approved as ${requestRoleById[r.id] || 'member'}`)}
+                                            disabled={(requestRoleById[r.id] || 'member') !== 'owner' && !resolveRequestWorkspaceId(r)}
                                         >
                                             Approve
                                         </button>
