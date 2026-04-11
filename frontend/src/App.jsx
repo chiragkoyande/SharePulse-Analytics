@@ -441,6 +441,7 @@ export default function App() {
 
                 {!loading && (
                     <p className="results-info">
+                        Scope: <strong>{activeWorkspace ? activeWorkspace.name : 'All Workspaces'}</strong> •{' '}
                         Showing <strong>{visibleResources.length}</strong> of <strong>{displayedResources.length}</strong> resources
                         {searchQuery && <span> matching &ldquo;{searchQuery}&rdquo;</span>}
                         {selectedDomain && <span> from &ldquo;{selectedDomain}&rdquo;</span>}

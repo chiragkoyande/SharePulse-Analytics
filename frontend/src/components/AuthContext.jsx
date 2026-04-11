@@ -67,18 +67,23 @@ export function AuthProvider({ children }) {
             const wsList = json.data || [];
             setWorkspaces(wsList);
 
-            // Auto-select first workspace if none persisted
-            const savedWs = localStorage.getItem('active_workspace_id');
-            if (savedWs && wsList.find((w) => w.id === savedWs)) {
-                setActiveWorkspaceIdState(savedWs);
-            } else if (wsList.length > 0) {
-                setActiveWorkspaceIdState(wsList[0].id);
-                localStorage.setItem('active_workspace_id', wsList[0].id);
+            // Super admins default to global view to avoid hiding recent data in other workspaces.
+            if (user?.role === 'super_admin') {
+                setActiveWorkspaceIdState(null);
+                localStorage.removeItem('active_workspace_id');
+            } else {
+                const savedWs = localStorage.getItem('active_workspace_id');
+                if (savedWs && wsList.find((w) => w.id === savedWs)) {
+                    setActiveWorkspaceIdState(savedWs);
+                } else if (wsList.length > 0) {
+                    setActiveWorkspaceIdState(wsList[0].id);
+                    localStorage.setItem('active_workspace_id', wsList[0].id);
+                }
             }
         } catch (err) {
             console.warn('Could not load workspaces:', err.message);
         }
-    }, []);
+    }, [user?.role]);
 
     // Load workspaces when token is available
     useEffect(() => {
