@@ -43,6 +43,7 @@ export default function AdminPanel({ onClose }) {
     const [actionMsg, setActionMsg] = useState(null);
     const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(activeWorkspaceId || null);
     const [requestWorkspaceById, setRequestWorkspaceById] = useState({});
+    const [requestRoleById, setRequestRoleById] = useState({});
 
     const [wsForm, setWsForm] = useState({
         name: '',
@@ -422,7 +423,7 @@ export default function AdminPanel({ onClose }) {
                                     <div className="admin-item__actions">
                                         <select
                                             className="group-form__input"
-                                            style={{ maxWidth: 220 }}
+                                            style={{ maxWidth: 180 }}
                                             value={resolveRequestWorkspaceId(r)}
                                             onChange={(e) => setRequestWorkspaceById((prev) => ({ ...prev, [r.id]: e.target.value }))}
                                         >
@@ -431,9 +432,19 @@ export default function AdminPanel({ onClose }) {
                                                 <option key={ws.id} value={ws.id}>{ws.name}</option>
                                             ))}
                                         </select>
+                                        <select
+                                            className="group-form__input"
+                                            style={{ maxWidth: 110 }}
+                                            value={requestRoleById[r.id] || 'member'}
+                                            onChange={(e) => setRequestRoleById((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                                        >
+                                            <option value="member">Member</option>
+                                            <option value="admin">Admin</option>
+                                            <option value="owner">Owner</option>
+                                        </select>
                                         <button
                                             className="admin-btn admin-btn--approve"
-                                            onClick={() => doAction('approve', { email: r.email, workspace_id: resolveRequestWorkspaceId(r) }, `${r.email} approved`)}
+                                            onClick={() => doAction('approve', { email: r.email, workspace_id: resolveRequestWorkspaceId(r), role: requestRoleById[r.id] || 'member' }, `${r.email} approved as ${requestRoleById[r.id] || 'member'}`)}
                                             disabled={!resolveRequestWorkspaceId(r)}
                                         >
                                             Approve

@@ -117,7 +117,7 @@ router.get('/requests', async (req, res, next) => {
 
 router.post('/approve', async (req, res, next) => {
     try {
-        const { email, workspace_id } = req.body;
+        const { email, workspace_id, role } = req.body;
         if (!email) return res.status(400).json({ success: false, error: 'Email is required' });
 
         const normalizedEmail = email.toLowerCase().trim();
@@ -189,10 +189,11 @@ router.post('/approve', async (req, res, next) => {
         }
 
         // Upsert into app_users
+        const approvedRole = ['admin', 'owner'].includes(role) ? 'admin' : 'user';
         const { error: upsertErr } = await supabase
             .from('app_users')
             .upsert(
-                { email: normalizedEmail, role: 'user', status: 'active' },
+                { email: normalizedEmail, role: approvedRole, status: 'active' },
                 { onConflict: 'email' }
             );
 
@@ -204,7 +205,7 @@ router.post('/approve', async (req, res, next) => {
                 {
                     workspace_id: targetWorkspaceId,
                     user_email: normalizedEmail,
-                    role: 'member',
+                    role: role || 'member',
                 },
                 { onConflict: 'workspace_id,user_email' }
             );
