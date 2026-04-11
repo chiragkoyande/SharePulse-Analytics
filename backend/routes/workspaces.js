@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { supabase } from '../db.js';
-import { requireAuth, requireSuperAdmin, requireWorkspaceAccess } from '../middleware/authMiddleware.js';
+import { requireAuth, requireAdmin, requireSuperAdmin, requireWorkspaceAccess } from '../middleware/authMiddleware.js';
 import {
     requestGroupHistoryScan,
     ensureWorkspaceBotSession,
@@ -58,9 +58,9 @@ router.get('/workspaces', requireAuth, async (req, res, next) => {
 });
 
 // ── POST /workspaces ────────────────────────
-// Super admin creates a new workspace.
+// Admin or super admin creates a new workspace.
 
-router.post('/workspaces', requireAuth, requireSuperAdmin, async (req, res, next) => {
+router.post('/workspaces', requireAuth, requireAdmin, async (req, res, next) => {
     try {
         const { name, slug, description, color, owner_email } = req.body;
 

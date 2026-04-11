@@ -20,6 +20,7 @@ const WS_COLORS = [
 export default function AdminPanel({ onClose }) {
     const {
         token,
+        isAdmin,
         isSuperAdmin,
         activeWorkspaceId,
         setActiveWorkspaceId,
@@ -511,10 +512,10 @@ export default function AdminPanel({ onClose }) {
                             )}
                         </section>
 
-                        {(isSuperAdmin || selectedWorkspace?.my_role === 'owner') && (
+                        {(isAdmin || isSuperAdmin || selectedWorkspace?.my_role === 'owner') && (
                             <section className="admin-step">
-                                <h3>Step 2: {isSuperAdmin && !editWsId ? 'Create or Edit Workspace' : 'Edit Workspace'}</h3>
-                                <p>{isSuperAdmin && !editWsId ? 'Create workspace first, then select it above.' : 'Update the details for the selected workspace.'}</p>
+                                <h3>Step 2: {(isAdmin || isSuperAdmin) && !editWsId ? 'Create or Edit Workspace' : 'Edit Workspace'}</h3>
+                                <p>{(isAdmin || isSuperAdmin) && !editWsId ? 'Create workspace first, then select it above.' : 'Update the details for the selected workspace.'}</p>
                                 <form className="group-form" onSubmit={handleWsSubmit}>
                                     <div className="group-form__row">
                                         <input type="text" placeholder="Workspace Name *" value={wsForm.name}
