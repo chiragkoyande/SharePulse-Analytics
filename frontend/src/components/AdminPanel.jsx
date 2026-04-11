@@ -31,6 +31,10 @@ export default function AdminPanel({ onClose }) {
     const [workspaces, setWorkspaces] = useState([]);
     const [members, setMembers] = useState([]);
     const [waGroups, setWaGroups] = useState([]);
+    const [waSession, setWaSession] = useState(null);
+    const [availableWaGroups, setAvailableWaGroups] = useState([]);
+    const [selectedAvailableWaGroup, setSelectedAvailableWaGroup] = useState('');
+    const [waUiBusy, setWaUiBusy] = useState(false);
 
     const [tab, setTab] = useState('workspace_setup');
     const [loading, setLoading] = useState(true);
@@ -127,6 +131,39 @@ export default function AdminPanel({ onClose }) {
             setLoading(false);
         }
     }, [selectedWorkspaceId, token, toFriendlyError]);
+
+    const loadWaSessionStatus = useCallback(async () => {
+        if (!selectedWorkspaceId) {
+            setWaSession(null);
+            return;
+        }
+        try {
+            const res = await backendFetch(`${API_BASE}/workspaces/${selectedWorkspaceId}/bot-session`, { headers: authHeaders });
+            const json = await res.json();
+            if (!json.success) throw new Error(json.error || 'Failed to load WhatsApp session');
+            setWaSession(json.data || null);
+        } catch (err) {
+            setWaSession((prev) => ({
+                ...(prev || {}),
+                status: 'error',
+                error: toFriendlyError(err),
+            }));
+        }
+    }, [selectedWorkspaceId, token, toFriendlyError]);
+
+    useEffect(() => {
+        if (!selectedWorkspaceId) {
+            setWaSession(null);
+            setAvailableWaGroups([]);
+            setSelectedAvailableWaGroup('');
+            return;
+        }
+        loadWaSessionStatus();
+        const timer = setInterval(() => {
+            loadWaSessionStatus();
+        }, 5000);
+        return () => clearInterval(timer);
+    }, [selectedWorkspaceId, loadWaSessionStatus]);
 
     useEffect(() => {
         loadData();
@@ -294,6 +331,52 @@ export default function AdminPanel({ onClose }) {
             setActionMsg({ type: 'error', text: toFriendlyError(err) });
         }
     };
+
+    const handleConnectWorkspaceWhatsApp = async () => {
+        if (!selectedWorkspaceId) {
+            setActionMsg({ type: 'error', text: 'Select a workspace first' });
+            return;
+        }
+        setWaUiBusy(true);
+        try {
+            const res = await backendFetch(`${API_BASE}/workspaces/${selectedWorkspaceId}/bot-session/connect`, {
+                method: 'POST',
+                headers: authHeaders,
+            });
+            const json = await res.json();
+            if (!json.success) throw new Error(json.error || 'Failed to start WhatsApp session');
+            setWaSession(json.data || null);
+            setActionMsg({ type: 'success', text: 'WhatsApp session started. Scan QR when it appears.' });
+        } catch (err) {
+            setActionMsg({ type: 'error', text: toFriendlyError(err) });
+        } finally {
+            setWaUiBusy(false);
+            loadWaSessionStatus();
+        }
+    };
+
+    const handleFetchAvailableGroups = async () => {
+        if (!selectedWorkspaceId) {
+            setActionMsg({ type: 'error', text: 'Select a workspace first' });
+            return;
+        }
+        setWaUiBusy(true);
+        try {
+            const res = await backendFetch(`${API_BASE}/workspaces/${selectedWorkspaceId}/available-groups`, {
+                headers: authHeaders,
+            });
+            const json = await res.json();
+            if (!json.success) throw new Error(json.error || 'Failed to fetch WhatsApp groups');
+            setAvailableWaGroups(json.data || []);
+            setActionMsg({ type: 'success', text: `Fetched ${json.count || 0} WhatsApp group(s)` });
+        } catch (err) {
+            setActionMsg({ type: 'error', text: toFriendlyError(err) });
+        } finally {
+            setWaUiBusy(false);
+        }
+    };
+
+    const selectedAvailableGroupObj = availableWaGroups.find((g) => g.id === selectedAvailableWaGroup) || null;
 
     return (
         <div className="admin-overlay">
@@ -502,7 +585,91 @@ export default function AdminPanel({ onClose }) {
 
                         <section className="admin-step">
                             <h3>Step 3: Connect WhatsApp Group</h3>
-                            <p>Group will be attached to selected workspace and history scan will run automatically.</p>
+                            <p>Connect workspace WhatsApp first, scan QR in UI, then choose a group from your account.</p>
+                            <div className="wa-session-card">
+                                <div className="wa-session-card__status">
+                                    <span className={`wa-session-pill wa-session-pill--${waSession?.status || 'idle'}`}>
+                                        {waSession?.status || 'idle'}
+                                    </span>
+                                    <span className="wa-session-card__time">
+                                        {waSession?.updated_at ? `Updated ${formatDate(waSession.updated_at)}` : 'No session activity yet'}
+                                    </span>
+                                </div>
+                                {waSession?.error && (
+                                    <div className="wa-session-card__error">{waSession.error}</div>
+                                )}
+                                <div className="group-form__actions">
+                                    <button
+                                        type="button"
+                                        className="admin-btn admin-btn--promote"
+                                        onClick={handleConnectWorkspaceWhatsApp}
+                                        disabled={!selectedWorkspaceId || waUiBusy}
+                                    >
+                                        {waUiBusy ? 'Starting...' : 'Connect WhatsApp'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="admin-btn"
+                                        onClick={loadWaSessionStatus}
+                                        disabled={!selectedWorkspaceId}
+                                    >
+                                        Refresh Status
+                                    </button>
+                                </div>
+                                {waSession?.qr && (
+                                    <div className="wa-session-qr">
+                                        <p>Scan this QR from your WhatsApp app (Linked devices):</p>
+                                        <img
+                                            className="wa-session-qr__img"
+                                            src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(waSession.qr)}`}
+                                            alt="WhatsApp QR code"
+                                        />
+                                        <p className="wa-session-qr__fallback-label">Fallback QR text:</p>
+                                        <textarea
+                                            readOnly
+                                            value={waSession.qr}
+                                            className="wa-session-qr__text"
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                            <div className="group-form">
+                                <div className="group-form__row">
+                                    <select
+                                        className="group-form__input"
+                                        value={selectedAvailableWaGroup}
+                                        onChange={(e) => setSelectedAvailableWaGroup(e.target.value)}
+                                        disabled={!selectedWorkspaceId || availableWaGroups.length === 0}
+                                    >
+                                        <option value="">Select a discovered WhatsApp group...</option>
+                                        {availableWaGroups.map((g) => (
+                                            <option key={g.id} value={g.id}>{g.name} · {g.id}</option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        type="button"
+                                        className="admin-btn admin-btn--promote"
+                                        onClick={handleFetchAvailableGroups}
+                                        disabled={!selectedWorkspaceId || waUiBusy}
+                                    >
+                                        Fetch My Groups
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="admin-btn"
+                                        disabled={!selectedAvailableGroupObj}
+                                        onClick={() => {
+                                            if (!selectedAvailableGroupObj) return;
+                                            setWaForm({
+                                                whatsapp_group_id: selectedAvailableGroupObj.id,
+                                                name: selectedAvailableGroupObj.name || '',
+                                            });
+                                        }}
+                                    >
+                                        Use Selected
+                                    </button>
+                                </div>
+                            </div>
                             <div className="group-form__actions">
                                 <button type="button" className="admin-btn admin-btn--promote" onClick={handleRescanWorkspaceGroups} disabled={!selectedWorkspaceId}>
                                     Rescan Connected Groups

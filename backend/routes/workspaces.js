@@ -1,7 +1,12 @@
 import { Router } from 'express';
 import { supabase } from '../db.js';
 import { requireAuth, requireSuperAdmin, requireWorkspaceAccess } from '../middleware/authMiddleware.js';
-import { requestGroupHistoryScan } from '../bot.js';
+import {
+    requestGroupHistoryScan,
+    ensureWorkspaceBotSession,
+    getWorkspaceBotSessionStatus,
+    getWorkspaceAvailableGroups,
+} from '../bot.js';
 
 const router = Router();
 
@@ -292,6 +297,43 @@ router.get('/workspaces/:workspace_id/groups', requireAuth, requireWorkspaceAcce
 
         if (error) throw error;
         res.json({ success: true, data: data || [] });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// ── GET /workspaces/:workspace_id/bot-session ─
+// Workspace WhatsApp session status + current QR (if pending).
+router.get('/workspaces/:workspace_id/bot-session', requireAuth, requireWorkspaceAccess('admin'), async (req, res, next) => {
+    try {
+        const { workspace_id } = req.params;
+        const status = getWorkspaceBotSessionStatus(workspace_id);
+        res.json({ success: true, data: status });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// ── POST /workspaces/:workspace_id/bot-session/connect ─
+// Start/ensure workspace-scoped WhatsApp session.
+router.post('/workspaces/:workspace_id/bot-session/connect', requireAuth, requireWorkspaceAccess('admin'), async (req, res, next) => {
+    try {
+        const { workspace_id } = req.params;
+        await ensureWorkspaceBotSession(workspace_id);
+        const status = getWorkspaceBotSessionStatus(workspace_id);
+        res.json({ success: true, data: status });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// ── GET /workspaces/:workspace_id/available-groups ─
+// List groups visible to the workspace-scoped WhatsApp session.
+router.get('/workspaces/:workspace_id/available-groups', requireAuth, requireWorkspaceAccess('admin'), async (req, res, next) => {
+    try {
+        const { workspace_id } = req.params;
+        const groups = await getWorkspaceAvailableGroups(workspace_id);
+        res.json({ success: true, count: groups.length, data: groups });
     } catch (error) {
         next(error);
     }

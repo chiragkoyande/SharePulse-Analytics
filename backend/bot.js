@@ -38,6 +38,8 @@ const recentUrlHashes = new Set();
 const recentUrlHashQueue = [];
 const blacklistedLogTimestamps = new Map();
 let mismatchLogCount = 0;
+const DEFAULT_SESSION_KEY = '__default__';
+const sessionRuntime = new Map(); // key -> runtime info for UI/API
 
 // Map: whatsappGroupId -> workspace_id (UUID)
 let groupWorkspaceMap = new Map();
@@ -70,6 +72,40 @@ function normalizeWhatsAppGroupId(rawId) {
 function normalizeWorkspaceId(rawWorkspaceId) {
     const value = String(rawWorkspaceId || '').trim();
     return value || null;
+}
+
+function workspaceSessionKey(workspaceId = null) {
+    return workspaceId ? `ws:${workspaceId}` : DEFAULT_SESSION_KEY;
+}
+
+function updateSessionRuntime(workspaceId, patch) {
+    const key = workspaceSessionKey(workspaceId);
+    const prev = sessionRuntime.get(key) || {
+        workspace_id: workspaceId || null,
+        status: 'idle',
+        qr: null,
+        error: null,
+        updated_at: new Date().toISOString(),
+    };
+    const next = {
+        ...prev,
+        ...patch,
+        workspace_id: workspaceId || null,
+        updated_at: new Date().toISOString(),
+    };
+    sessionRuntime.set(key, next);
+    return next;
+}
+
+function getSessionRuntime(workspaceId = null) {
+    const key = workspaceSessionKey(workspaceId);
+    return sessionRuntime.get(key) || {
+        workspace_id: workspaceId || null,
+        status: 'idle',
+        qr: null,
+        error: null,
+        updated_at: null,
+    };
 }
 
 function hasAnyReadyClient() {
@@ -752,6 +788,7 @@ function createBotClient(workspaceId = null) {
     const normalizedWorkspaceId = normalizeWorkspaceId(workspaceId);
     const label = sessionLabel(normalizedWorkspaceId);
     const sessionClientId = resolveSessionClientId(normalizedWorkspaceId);
+    updateSessionRuntime(normalizedWorkspaceId, { status: 'initializing', qr: null, error: null, client_id: sessionClientId });
 
     const client = new Client({
         authStrategy: new LocalAuth({ clientId: sessionClientId, dataPath: WWEBJS_DATA_PATH }),
@@ -765,6 +802,7 @@ function createBotClient(workspaceId = null) {
 
     client.on('qr', (qr) => {
         if (initWarningTimer) { clearTimeout(initWarningTimer); initWarningTimer = null; }
+        updateSessionRuntime(normalizedWorkspaceId, { status: 'qr', qr, error: null });
         console.log(`\n📱 Scan this QR code with WhatsApp (${label}):\n`);
         qrcode.generate(qr, { small: true });
     });
@@ -772,6 +810,7 @@ function createBotClient(workspaceId = null) {
     client.on('loading_screen', (pct, msg) => console.log(`⏳ [${label}] Loading: ${pct}% ${msg || ''}`));
     client.on('authenticated', () => {
         if (initWarningTimer) { clearTimeout(initWarningTimer); initWarningTimer = null; }
+        updateSessionRuntime(normalizedWorkspaceId, { status: 'authenticated', error: null });
         console.log(`🔐 [${label}] Authenticated`);
     });
     client.on('change_state', (s) => console.log(`ℹ️  [${label}] WA state: ${s}`));
@@ -780,6 +819,7 @@ function createBotClient(workspaceId = null) {
         if (initWarningTimer) { clearTimeout(initWarningTimer); initWarningTimer = null; }
         if (normalizedWorkspaceId) workspaceClients.set(normalizedWorkspaceId, client);
         else activeClient = client;
+        updateSessionRuntime(normalizedWorkspaceId, { status: 'ready', qr: null, error: null });
         console.log(`\n✅ WhatsApp client ready (${label})!`);
         try {
             if (DEBUG_GROUP_MATCH) {
@@ -814,11 +854,15 @@ function createBotClient(workspaceId = null) {
         }
     });
 
-    client.on('auth_failure', (msg) => console.error(`❌ [${label}] Auth failure:`, msg));
+    client.on('auth_failure', (msg) => {
+        updateSessionRuntime(normalizedWorkspaceId, { status: 'auth_failure', error: String(msg || 'auth failure') });
+        console.error(`❌ [${label}] Auth failure:`, msg);
+    });
     client.on('disconnected', () => {
         console.warn(`⚠️  [${label}] Disconnected — reconnecting in 5s`);
         if (normalizedWorkspaceId) workspaceClients.delete(normalizedWorkspaceId);
         else activeClient = null;
+        updateSessionRuntime(normalizedWorkspaceId, { status: 'disconnected' });
         if (!activeClient && workspaceClients.size === 0 && mappingRefreshTimer) {
             clearInterval(mappingRefreshTimer);
             mappingRefreshTimer = null;
@@ -843,11 +887,13 @@ function createBotClient(workspaceId = null) {
 
     console.log(`\n🚀 Initializing WhatsApp client (${label})…\n`);
     initWarningTimer = setTimeout(() => {
+        updateSessionRuntime(normalizedWorkspaceId, { status: 'initializing-slow' });
         console.warn(`⚠️  [${label}] Init taking >${INIT_WARNING_TIMEOUT_MS / 1000}s`);
     }, INIT_WARNING_TIMEOUT_MS);
 
     client.initialize().catch((err) => {
         if (initWarningTimer) { clearTimeout(initWarningTimer); initWarningTimer = null; }
+        updateSessionRuntime(normalizedWorkspaceId, { status: 'fatal', error: String(err?.message || err) });
         console.error(`❌ [${label}] Fatal:`, err?.message || err);
     });
 
@@ -866,6 +912,37 @@ async function startWorkspaceSession(workspaceId) {
     } finally {
         workspaceClientInitInProgress.delete(normalizedWorkspaceId);
     }
+}
+
+export async function ensureWorkspaceBotSession(workspaceId) {
+    return startWorkspaceSession(workspaceId);
+}
+
+export function getWorkspaceBotSessionStatus(workspaceId = null) {
+    const normalizedWorkspaceId = normalizeWorkspaceId(workspaceId);
+    const client = getClientForWorkspace(normalizedWorkspaceId);
+    const runtime = getSessionRuntime(normalizedWorkspaceId);
+    return {
+        ...runtime,
+        workspace_id: normalizedWorkspaceId,
+        connected: !!client,
+        has_qr: !!runtime.qr,
+    };
+}
+
+export async function getWorkspaceAvailableGroups(workspaceId) {
+    const normalizedWorkspaceId = normalizeWorkspaceId(workspaceId);
+    const client = getClientForWorkspace(normalizedWorkspaceId);
+    if (!client) return [];
+    const chats = await client.getChats();
+    return (chats || [])
+        .filter((chat) => chat?.isGroup)
+        .map((chat) => ({
+            id: normalizeWhatsAppGroupId(chat?.id?._serialized),
+            name: chat?.name || 'Unnamed Group',
+        }))
+        .filter((row) => row.id)
+        .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export function startBot() {
